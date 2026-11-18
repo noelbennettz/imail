@@ -416,6 +416,21 @@ The included Compose file runs one container and mounts `./config`:
 `docker-compose.yml` builds the image locally. `docker-compose.ghcr.yml` is the
 same deployment but pulls `ghcr.io/noelbennettz/imail:latest` instead; use the
 latter when you do not want a local Go/Node build.
+`docker-compose.example.yml` is the same service with every port, volume and
+variable commented in place; it needs no edits to read, every line says what it
+is for.
+
+| Key | Meaning |
+| --- | --- |
+| `ports` | `"host address:host port:container port"`. 25 (SMTP), 465 (SMTPS), 587 (submission), 993 (IMAPS), 995 (POP3S) and 110 (POP3) must stay reachable from the internet for mail to work; 80 serves HTTP, ACME HTTP-01 and the redirect to HTTPS, 443 serves the webmail and admin console. Naming a host address (`127.0.0.1:443:443`) publishes that port on the loopback only — useful for 80/443 behind a TLS proxy, after setting `httpsEnabled` to `2` in `config.json` |
+| `volumes` | `./config:/work/config` is the whole server state: configuration, SQLite database, DKIM key, certificates. A named volume behaves the same; a host directory is easier to back up |
+| `environment: TZ` | Chooses the zone used in log lines. Stored timestamps are always UTC and rendered in the browser's local time |
+| `healthcheck` | Probes `/api/ping` on `127.0.0.1` and then `[::1]`, so a container with no IPv4 loopback still reports healthy |
+| `image` / `build` | Pull `ghcr.io/noelbennettz/imail:latest`, or build from this checkout with `VERSION: internal` as the build argument |
+
+The container's own network is a plain bridge and needs no IPv6 of its own:
+listeners are published on the host, and the address family a listener uses is
+chosen by `listenMode` in `config.json`, not by Docker.
 
 ```yaml
 services:

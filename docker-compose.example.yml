@@ -1,0 +1,58 @@
+# A fully commented Compose file for iMail.
+#
+#   mkdir -p config
+#   docker compose -f docker-compose.example.yml up -d
+#
+# docker-compose.yml builds the image locally and docker-compose.ghcr.yml pulls
+# the published one; this file is the reference for the parameters both set.
+# DOCS.md, "Docker and operations", explains what each key means.
+
+services:
+  imail:
+    image: ghcr.io/noelbennettz/imail:latest
+    # Or build from this checkout instead of pulling:
+    # build:
+    #   context: .
+    #   args:
+    #     VERSION: internal
+    container_name: imail
+    restart: unless-stopped
+    pull_policy: always
+
+    ports:
+      # "host address:host port:container port". Without a host address the port
+      # is reachable on every interface, which is what a mail server needs.
+      - "25:25"       # SMTP (STARTTLS), inbound mail from other servers
+      - "465:465"     # SMTPS, implicit TLS submission
+      - "587:587"     # submission, STARTTLS
+      - "993:993"     # IMAPS
+      - "995:995"     # POP3S
+      - "110:110"     # POP3, STLS required before authentication
+      # HTTP and HTTPS can be bound to the loopback when a TLS proxy terminates
+      # TLS in front of iMail - set httpsEnabled to 2 in config.json first, so
+      # iMail does not redirect to an HTTPS port it no longer serves. ACME
+      # HTTP-01 needs port 80 reachable from the internet, so use DNS-01 or an
+      # uploaded certificate in that setup.
+      # - "127.0.0.1:80:80"
+      # - "127.0.0.1:443:443"
+      - "80:80"       # HTTP, ACME HTTP-01, redirect to HTTPS
+      - "443:443"     # HTTPS: webmail and the admin console
+
+    volumes:
+      # Everything persistent: config.json, the SQLite database, the DKIM key
+      # and TLS material. Back this directory up; it is the whole server state.
+      - ./config:/work/config
+      # A named volume works too, but a directory is one `cp` away from a backup.
+
+    environment:
+      # Logging zone only. Stored timestamps are UTC and rendered in the
+      # browser's local time.
+      - TZ=UTC
+
+    healthcheck:
+      # Dual-family probe: an IPv6-only container does not answer on 127.0.0.1.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${HTTP_PORT:-80}/api/ping || wget -qO- http://[::1]:${HTTP_PORT:-80}/api/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s

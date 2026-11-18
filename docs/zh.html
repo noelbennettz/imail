@@ -184,7 +184,7 @@ mkdir -p config</code></pre>
       </div>
       <div class="step">
         <h3>啟動已發佈的 image</h3>
-        <p>這會拉 <code>ghcr.io/noelbennettz/imail:latest</code>，並發佈八個郵件與網頁 port。</p>
+        <p>這會拉 <code>ghcr.io/noelbennettz/imail:latest</code>，並發佈八個郵件與網頁 port。要綁哪個位址、用哪些 port、<code>./config</code> 放哪裡都可以改；每個參數的意義寫在 DOCS.md，repo 裡的 <code>docker-compose.example.yml</code> 把每個 port 與 volume 都逐行註解好了。</p>
         <div class="copy-wrap">
           <button class="copy" type="button" data-copy>複製</button>
           <pre><code>docker compose -f docker-compose.ghcr.yml up -d

@@ -185,7 +185,7 @@ mkdir -p config</code></pre>
       </div>
       <div class="step">
         <h3>Start the published image</h3>
-        <p>This pulls <code>ghcr.io/noelbennettz/imail:latest</code> and publishes the eight mail and web ports.</p>
+        <p>This pulls <code>ghcr.io/noelbennettz/imail:latest</code> and publishes the eight mail and web ports. The published addresses, ports and the <code>./config</code> path are parameters you can change; DOCS.md explains each one, and <code>docker-compose.example.yml</code> in the repository carries every port and volume with a comment.</p>
         <div class="copy-wrap">
           <button class="copy" type="button" data-copy>Copy</button>
           <pre><code>docker compose -f docker-compose.ghcr.yml up -d
