@@ -75,7 +75,7 @@ docker compose logs -f imail
 ```
 
 `docker-compose.yml` builds the image from the working tree, publishes the eight
-listeners and mounts `./config` at `/work/config`. The `config/` directory is
+ports and mounts `./config` at `/work/config`. The `config/` directory is
 created by the container on first start; keep it persistent and back it up.
 
 ### Run the published image with `docker run`
@@ -104,8 +104,7 @@ docker run -d \
 
 `/srv/imail/config` is the persistent volume. It must be writable by the
 container and should be backed up: it contains the configuration, database,
-DKIM key and TLS certificates. The image is published as a public package, so
-`docker pull` needs no login.
+DKIM key and TLS certificates.
 
 Then open `http://<server-ip>/` and complete the setup wizard. The same ports
 are used by the Compose example; on rootless Docker publish high host ports
@@ -162,10 +161,10 @@ fresh, unconfigured instance to an untrusted network.
   (`alice@example.com`). A bare name is rejected because the mailbox domain
   would be ambiguous.
 - The same rule is used by the web UI, SMTP AUTH, IMAP and POP3.
-- Accounts are globally unique. If you need the same local part in two
-  domains, they are separate accounts and should be named distinctly (for
-  example `alice` and `alice-sales`); the current schema does not allow
-  `alice@one.example` and `alice@two.example` to coexist.
+- Accounts are globally unique: `account` is a unique column in the user table
+  and the domain is a separate field. If you need the same local part in two
+  domains, use distinct account names (for example `alice` and `alice-sales`);
+  `alice@one.example` and `alice@two.example` cannot coexist.
 
 ## DNS records
 
@@ -209,7 +208,7 @@ dig -x <server-ip>
 
 | Port | Protocol | Notes |
 |---:|---|---|
-| 25 | SMTP | Inbound mail and STARTTLS when offered |
+| 25 | SMTP | Inbound mail from other servers; STARTTLS is offered and SASL AUTH is accepted only over TLS |
 | 80 | HTTP | Web UI in HTTP mode and ACME HTTP-01 challenges |
 | 110 | POP3 | Generic plaintext greeting; **STLS is required before USER/PASS** |
 | 443 | HTTPS | Web UI when `httpsEnabled` is not `2` |
@@ -234,19 +233,22 @@ IPv4.
 
 IPv6-only and IPv4-only hosts are supported. If `config.json` requests a family
 the host cannot bind, the server falls back to the available family at startup
-and logs a warning; listeners, readiness probes, the container healthcheck and
-the A/AAAA DNS guidance then all follow the effective family. A host that
-cannot reach one family at all naturally cannot deliver to a destination that
-only exists on that family; the failure is reported as a normal temporary
-delivery error and the next MX is tried.
+and logs a warning; the listeners, the loopback readiness probe and the A/AAAA
+DNS guidance then use the effective family, while the container healthcheck
+probes both loopbacks. A host that cannot reach one family at all naturally
+cannot deliver to a destination that only exists on that family; the failure is
+reported as a normal temporary delivery error and the next MX is tried.
 
 ### `httpsEnabled`
 
 `httpsEnabled` controls the web listener:
 
-- `0` / `1` — HTTPS is enabled and HTTP redirects to the HTTPS web domain,
-  except for `/api/ping`, `/api/login` and `/.well-known/acme-challenge/`.
-- `2` — HTTP-only mode. Use this behind a TLS reverse proxy or for local
+- `0` / `1` — HTTPS is enabled: the HTTPS listener starts on `httpsPort`
+  (default 443), and the HTTP listener on `httpPort` (default 80) answers only
+  `/api/ping` and `/.well-known/` for ACME HTTP-01, redirecting every other
+  request with `301` to `https://<webDomain><path>`.
+- `2` — HTTP-only mode: the HTTPS listener does not start and the HTTP listener
+  serves the whole application. Use this behind a TLS reverse proxy or for local
   testing. The session cookie is not marked `Secure` in this mode; terminate
   TLS at a trusted proxy when using HTTP-only mode in production.
 
@@ -266,14 +268,16 @@ The mailbox supports:
 - Conversation mode with subject normalization across `Re:`, `Fwd:`, localized
   reply/forward prefixes and multiple folders.
 - Reply, reply-all and forward with quoted original content.
-- Attachments: inline images are served with a sandboxed content type; all
-  other attachments are downloaded as `application/octet-stream`.
+- Attachments: inline images are served inline with the header
+  `Content-Security-Policy: sandbox`; every other attachment is sent as
+  `application/octet-stream` with `Content-Disposition: attachment` and
+  `X-Content-Type-Options: nosniff`.
 - Conversation pagination: five messages per page, then “Load more” or scroll
   to load the next page.
 - Per-message actions under the date: **View source** and **Delete this
-  message**. Source is the original MIME for messages received or sent over
-  SMTP after this version; older or API-created messages use a reconstructed
-  header/body view.
+  message**. Source is the stored original MIME when the row has one (messages
+  received over SMTP); sent messages and rows without stored MIME use a
+  reconstructed header/body view.
 - Per-mailbox quota display and settings.
 
 Raw MIME is stored in the database for new SMTP messages so “View source” can
@@ -282,8 +286,8 @@ usage; include the database in backups and monitor free space.
 
 ## Administration
 
-Open `/settings` from the mailbox or the settings icon. The page is split into
-personal settings and administration.
+Open the settings page (`#/settings` in the web client) from the mailbox or the
+settings icon. The page is split into personal settings and administration.
 
 ### Personal settings
 
@@ -300,8 +304,9 @@ personal settings and administration.
 
 - **Users** — create, edit, disable and delete mailboxes. Each user has an
   account, display name, primary domain, password and quota in MiB. Account
-  names are 1–20 letters, digits, dots, underscores or hyphens; passwords are
-  at least 8 characters.
+  names are 1–20 characters, must begin with a letter or a digit, and may contain
+  letters, digits, dots, underscores and hyphens; passwords are at least 8
+  characters.
 - **Domains** — add or remove configured domains. A domain with users cannot be
   removed, and the primary domain cannot be removed. Removing a domain triggers
   a listener reload.
@@ -340,7 +345,8 @@ iMail supports three certificate flows:
    certificate.
 2. **Per-domain certificate** — issue or upload one from Domains → TLS. The
    certificate is stored under `config/ssl/domains/<domain>/` and selected by
-   SNI for that domain and its `smtp.`, `imap.` and `pop.` names.
+   SNI for that domain, its `smtp.`, `imap.` and `pop.` names, and the
+   `webDomain` when it is the domain itself or a subdomain of it.
 3. **Automatic renewal** — HTTP-01 and Cloudflare DNS-01 certificates are
    checked daily and renewed when fewer than 30 days remain. Manual DNS-01 and
    uploaded certificates are not renewed automatically; watch their expiry in
@@ -390,13 +396,22 @@ before editing it; it is written atomically with mode `0600`.
 Notes:
 
 - `SSLPrivateKeyPath`, `SSLPublicKeyPath` and `dkimPrivateKeyPath` may be
-  absolute or relative to `IMAIL_ROOT` / the binary directory.
+  absolute or relative; a relative path is resolved against the `IMAIL_ROOT`
+  environment variable, or against the directory of the executable when
+  `IMAIL_ROOT` is unset.
+- `tlsMinVersion` and `tlsMaxVersion` accept `1.2` and `1.3`. Any other value
+  falls back to `1.2` for the minimum and `1.3` for the maximum, and the two are
+  swapped when the maximum is lower than the minimum.
+- Two environment variables are read: `IMAIL_ROOT` (path resolution above) and
+  `setup_port` (the port of the setup wizard's HTTP listener, overridable with
+  the `-p` flag). Every other setting lives in `config.json`.
 - `dnsApiToken` is a secret. It is redacted from startup logs, but it remains
   in `config.json`; protect that file and never commit it.
 - `domainCertificates` stores per-domain mode/provider/token metadata. Use the
   Domains page rather than editing it by hand.
-- MySQL/PostgreSQL require the matching schema and DSN; the default SQLite
-  database is suitable for a single small server.
+- MySQL and PostgreSQL take the connection string in `dbDSN` and the driver name
+  in `dbType`; the schema is created and synchronized on startup. The default
+  SQLite database is suitable for a single small server.
 - `isInit` is set by the setup wizard. Do not set it manually before completing
   setup unless you are restoring an existing configuration.
 - `listenMode` and `egressMode` are independent: a host may accept mail on both
@@ -412,15 +427,14 @@ The included Compose file runs one container and mounts `./config`:
 `docker-compose.yml` builds the image locally. `docker-compose.ghcr.yml` is the
 same deployment but pulls `ghcr.io/noelbennettz/imail:latest` instead; use the
 latter when you do not want a local Go/Node build.
-`docker-compose.example.yml` is the same service with every port, volume and
-variable commented in place; it needs no edits to read, every line says what it
-is for.
+`docker-compose.example.yml` is the same service with the ports, the volume and
+the variable commented in place.
 
 | Key | Meaning |
 | --- | --- |
 | `ports` | `"host address:host port:container port"`. 25 (SMTP), 465 (SMTPS), 587 (submission), 993 (IMAPS), 995 (POP3S) and 110 (POP3) must stay reachable from the internet for mail to work; 80 serves HTTP, ACME HTTP-01 and the redirect to HTTPS, 443 serves the webmail and admin console. Naming a host address (`127.0.0.1:443:443`) publishes that port on the loopback only — useful for 80/443 behind a TLS proxy, after setting `httpsEnabled` to `2` in `config.json` |
 | `volumes` | `./config:/work/config` is the whole server state: configuration, SQLite database, DKIM key, certificates. A named volume behaves the same; a host directory is easier to back up |
-| `environment: TZ` | Chooses the zone used in log lines. Stored timestamps are always UTC and rendered in the browser's local time |
+| `environment: TZ` | Accepted but has no effect: iMail sets the process local zone to UTC, so log lines and stored timestamps are UTC and the browser renders them in the device's local time |
 | `healthcheck` | Probes `/api/ping` on `127.0.0.1` and then `[::1]`, so a container with no IPv4 loopback still reports healthy |
 | `image` / `build` | Pull `ghcr.io/noelbennettz/imail:latest`, or build from this checkout with `VERSION: internal` as the build argument |
 
@@ -451,14 +465,14 @@ The application stores everything it needs under `/work/config`: the JSON
 configuration, SQLite database, DKIM key and TLS material. Keep that volume on
 persistent storage.
 
-The container health check calls `/api/ping`. Before setup that endpoint
-returns a setup-needed status by design; after setup it returns success when the
-HTTP listener is ready. If the container is healthy but mail is not working,
+The container health check calls `/api/ping`. While the HTTP listener answers,
+the endpoint returns HTTP 200: after setup with `{"data":"pong"}`, and during
+setup through the setup handler. A passing probe therefore only shows that the
+HTTP listener responded. If the container is healthy but mail is not working,
 check the mail listener logs and the host firewall separately.
 
-`TZ` in Compose does not change stored timestamps: iMail stores UTC internally
-and renders dates in the browser's local time. Set `TZ` only if your logging
-stack expects a specific local zone.
+`TZ` changes neither log lines nor stored timestamps: iMail sets the process
+local zone to UTC, and the browser renders dates in the device's local time.
 
 ### Updating
 
@@ -487,8 +501,8 @@ docker stop imail && docker rm imail
 
 The `config/` volume is not touched by an image update. Existing MD5 password
 hashes are upgraded to PBKDF2 on the next successful login, so no manual
-password reset is required. If you changed the session cookie name in an older
-build, users may need to sign in again.
+password reset is required. Sessions are stored in the database and the cookie
+is named `imail_session`, so an image update keeps users signed in.
 
 
 ## Backups and upgrades
@@ -521,20 +535,21 @@ before relying on it.
   iterations). Password changes revoke existing sessions. Minimum length is 8
   characters.
 - Multi-domain deployments require a full `account@domain` login for web,
-  SMTP, IMAP and POP3. The account namespace is global; duplicate local parts
-  across domains are not allowed by the current schema.
+  SMTP, IMAP and POP3. The account namespace is global: `account` is a unique
+  column, so duplicate local parts across domains are not possible.
 - TLS listeners require a known SNI by default. Keep `disableSNICheck` off.
 - Plaintext SMTP and POP3 greetings use a generic server name (`imail`) and do
   not disclose any configured mail domain.
-- Outbound SMTP verifies the remote MX certificate and does not silently fall
-  back to plaintext. A delivery that cannot establish verified TLS is reported
-  as a delivery failure.
+- Outbound SMTP tries port 25 with STARTTLS, then 587 with STARTTLS, then 465
+  with implicit TLS, and verifies the MX certificate against the MX hostname. It
+  never falls back to an unverified TLS session or to plaintext; a delivery that
+  cannot establish verified TLS is reported as a delivery failure.
 - Session cookies are `HttpOnly` and `SameSite=Lax`; `Secure` is enabled when
   HTTPS is enabled. Do not run an HTTPS deployment through an untrusted proxy.
 - The setup wizard is available before first initialization. Complete it on a
   trusted network and do not expose an unconfigured instance to the internet.
-- “View source” stores and displays the original MIME for new SMTP messages.
-  That can include full headers and attachments; protect the database and
+- “View source” stores and displays the original MIME for messages received over
+  SMTP. That can include full headers and attachments; protect the database and
   backups accordingly.
 - Run the container behind a firewall and expose only the ports you need. If
   you terminate TLS at a reverse proxy, forward the original hostname and
@@ -589,9 +604,9 @@ address works. New passwords shorter than 8 characters are rejected.
 ### Times look shifted
 
 iMail stores UTC and the browser converts timestamps to the device timezone.
-Check the client’s timezone rather than the server. Existing databases created
-by very old builds may contain timestamps written under a fixed server zone;
-those historical rows may need a one-time correction after upgrading.
+Check the client’s timezone rather than the server. Databases carried over from
+builds that wrote timestamps in a fixed server zone can contain rows offset by
+that zone; those rows need a one-time correction after migrating.
 
 ### POP3 says TLS is required
 
@@ -601,9 +616,9 @@ Port 110 accepts a generic plaintext greeting but authentication requires
 
 ### Mail works on IPv4 but not IPv6 (or the reverse)
 
-Check the effective family in the startup log (`listenMode … listening on …`;
-the line is absent when the configured family is available). Verify the host
-actually has the address and a route:
+Check the effective family in the startup warning (`listenMode "ipv6" is not
+available on this host, listening on "both" instead`, and the matching
+`egressMode` line). Verify the host actually has the address and a route:
 
 ```bash
 ip -6 addr show scope global
@@ -644,7 +659,7 @@ runtime. The repository vendors Go dependencies and builds with `-mod=vendor`.
 databases.
 
 Format Go code with gofumpt (`gofumpt -l -w .`). The root integration test
-starts the real listeners and therefore needs privileges for ports 25/80/443;
-package-level tests can run without those privileges. `go vet ./...` should be
-clean.
+starts the real SMTP, POP3 and IMAP listeners on 25, 110, 465, 587, 993 and 995
+and the HTTP listener on `setup_port`, so it needs privileges to bind the mail
+ports; package-level tests run without them. `go vet ./...` should be clean.
 
