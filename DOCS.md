@@ -103,12 +103,8 @@ docker run -d \
 
 `/srv/imail/config` is the persistent volume. It must be writable by the
 container and should be backed up: it contains the configuration, database,
-DKIM key and TLS certificates. If the GHCR package is private, authenticate
-first with a GitHub personal access token that has `read:packages`:
-
-```bash
-echo "$GITHUB_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
-```
+DKIM key and TLS certificates. The image is published as a public package, so
+`docker pull` needs no login.
 
 Then open `http://<server-ip>/` and complete the setup wizard. The same ports
 are used by the Compose example; on rootless Docker publish high host ports
@@ -133,9 +129,8 @@ docker compose -f docker-compose.ghcr.yml pull
 docker compose -f docker-compose.ghcr.yml up -d
 ```
 
-The same private-package note applies: authenticate to `ghcr.io` first if the
-package is not public. The `config/` directory is created by the container on
-first start; keep it persistent and back it up.
+The `config/` directory is created by the container on first start; keep it
+persistent and back it up.
 
 ### Setup wizard
 
