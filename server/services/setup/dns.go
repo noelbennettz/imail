@@ -31,7 +31,7 @@ func GetDNSSettings(ctx *context.Context) (map[string][]*DNSItem, error) {
 
 	ipv4 := ip.GetIPv4()
 	ipv6 := ip.GetIPv6()
-	mode := netutil.NormalizeMode(configData.ListenMode)
+	mode := netutil.EffectiveMode(configData.ListenMode)
 	includeV4 := mode != netutil.ModeIPv6
 	includeV6 := mode != netutil.ModeIPv4
 	hasAddress := false

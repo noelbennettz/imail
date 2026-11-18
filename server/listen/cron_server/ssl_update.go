@@ -4,6 +4,7 @@ import (
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/services/setup/ssl"
 	"github.com/noelbennettz/imail/signal"
+	"github.com/noelbennettz/imail/utils/netutil"
 	log "github.com/sirupsen/logrus"
 	"time"
 	// Added: HTTP readiness probe
@@ -74,16 +75,27 @@ func sslUpdateLoop() {
 	}
 }
 
-// Added: HTTP readiness probe (waits up to ~90 seconds)
-func waitHTTPReady() {
+// probeURL returns the loopback readiness URL for the configured listen mode.
+// IPv6-only hosts do not answer on 127.0.0.1, so the probe must follow the
+// same family the HTTP listener was bound to.
+func probeURL() string {
 	port := 80
 	if config.Instance != nil && config.Instance.HttpPort > 0 {
 		port = config.Instance.HttpPort
 	}
-	url := fmt.Sprintf("http://127.0.0.1:%d/api/ping", port)
+	mode := netutil.ModeBoth
+	if config.Instance != nil {
+		mode = config.Instance.ListenMode
+	}
+	return fmt.Sprintf("http://%s/api/ping", netutil.LoopbackAddress(mode, port))
+}
+
+// Added: HTTP readiness probe (waits up to ~90 seconds)
+func waitHTTPReady() {
+	url := probeURL()
 
 	for i := 0; i < 90; i++ {
-		resp, err := http.Get(url)
+		resp, err := netutil.ProbeClient.Get(url)
 		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
 			resp.Body.Close()
 			log.Infof("HTTP ready: %s", url)

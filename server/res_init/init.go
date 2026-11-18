@@ -127,7 +127,7 @@ func waitHTTPReady() {
 	url := fmt.Sprintf("http://%s/api/ping", netutil.LoopbackAddress(config.Instance.ListenMode, port))
 
 	for i := 0; i < 90; i++ {
-		resp, err := http.Get(url)
+		resp, err := netutil.ProbeClient.Get(url)
 		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
 			resp.Body.Close()
 			log.Infof("HTTP ready: %s", url)

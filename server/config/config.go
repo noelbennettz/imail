@@ -42,6 +42,9 @@ type Config struct {
 	IsInit             bool     `json:"isInit"`
 	// ListenMode selects socket binding: both (dual stack), ipv4 or ipv6.
 	ListenMode string `json:"listenMode"`
+	// EgressMode selects the address family used for outbound delivery:
+	// both (dual stack, Happy Eyeballs), ipv4 or ipv6.
+	EgressMode string `json:"egressMode"`
 	// TLSMinVersion/TLSMaxVersion restrict negotiated protocol versions.
 	TLSMinVersion string `json:"tlsMinVersion"`
 	TLSMaxVersion string `json:"tlsMaxVersion"`
@@ -119,6 +122,7 @@ func normalizeDomainName(domain string) string {
 // ApplyDefaults normalizes optional settings loaded from JSON.
 func (c *Config) ApplyDefaults() {
 	c.ListenMode = netutil.NormalizeMode(c.ListenMode)
+	c.EgressMode = netutil.NormalizeMode(c.EgressMode)
 	if c.TLSMinVersion == "" {
 		c.TLSMinVersion = "1.2"
 	}
@@ -237,6 +241,22 @@ func (l *logFormatter) Format(entry *log.Entry) ([]byte, error) {
 	b.WriteString("\n")
 	return b.Bytes(), nil
 }
+
+// warnIneffectiveModes reports a configured family the host cannot serve, so
+// an operator does not have to guess why listeners or deliveries behave
+// differently from config.json.
+func warnIneffectiveModes(c *Config) {
+	if c == nil {
+		return
+	}
+	if effective := netutil.EffectiveMode(c.ListenMode); effective != c.ListenMode {
+		log.Warnf("listenMode %q is not available on this host, listening on %q instead", c.ListenMode, effective)
+	}
+	if effective := netutil.EffectiveMode(c.EgressMode); effective != c.EgressMode {
+		log.Warnf("egressMode %q is not available on this host, sending over %q instead", c.EgressMode, effective)
+	}
+}
+
 func Init() {
 	var cfgData []byte
 	var err error
@@ -265,6 +285,8 @@ func Init() {
 	if len(Instance.Domains) == 0 && Instance.Domain != "" {
 		Instance.Domains = []string{Instance.Domain}
 	}
+
+	warnIneffectiveModes(Instance)
 
 	if Instance.Domain != "" && Instance.IsInit {
 		IsInit = true

@@ -3,6 +3,8 @@ package smtp
 import (
 	"errors"
 	"fmt"
+	"github.com/noelbennettz/imail/config"
+	"github.com/noelbennettz/imail/utils/netutil"
 	"io"
 	"net"
 	"net/textproto"
@@ -179,4 +181,110 @@ func expectSMTPCommand(conn *textproto.Conn, prefix string) error {
 		return fmt.Errorf("SMTP command = %q, want prefix %q", line, prefix)
 	}
 	return nil
+}
+
+func TestAddress(t *testing.T) {
+	cases := []struct {
+		host string
+		port int
+		want string
+	}{
+		{host: "mx.example.test", port: 25, want: "mx.example.test:25"},
+		{host: "mx.example.test.", port: 587, want: "mx.example.test:587"},
+		{host: " 2001:db8::1 ", port: 465, want: "[2001:db8::1]:465"},
+	}
+	for _, tc := range cases {
+		if got := Address(tc.host, tc.port); got != tc.want {
+			t.Fatalf("Address(%q, %d) = %q, want %q", tc.host, tc.port, got, tc.want)
+		}
+	}
+}
+
+// startGreetingServer accepts one connection and writes the SMTP banner, which
+// is all Dial needs before handing the connection to the caller.
+func startGreetingServer(t *testing.T, network string) (string, <-chan error) {
+	t.Helper()
+	listener, err := net.Listen(network, map[string]string{
+		"tcp4": "127.0.0.1:0",
+		"tcp6": "[::1]:0",
+	}[network])
+	if err != nil {
+		t.Skipf("cannot listen on %s here: %v", network, err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	done := make(chan error, 1)
+	go func() {
+		defer listener.Close()
+		conn, err := listener.Accept()
+		if err != nil {
+			done <- err
+			return
+		}
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+		if _, err := conn.Write([]byte("220 test ESMTP ready\r\n")); err != nil {
+			done <- err
+			return
+		}
+		buf := make([]byte, 1)
+		for {
+			if _, err := conn.Read(buf); err != nil {
+				done <- nil
+				return
+			}
+		}
+	}()
+	return listener.Addr().String(), done
+}
+
+// TestDialForcesConfiguredEgressFamily covers requirement 2: outbound mail
+// must follow egressMode, so an IPv6-only listener is reachable over IPv6 and
+// not over IPv4.
+func TestDialForcesConfiguredEgressFamily(t *testing.T) {
+	if !netutil.SupportsIPv6() {
+		t.Skip("no IPv6 loopback on this host")
+	}
+
+	oldConfig := config.Instance
+	t.Cleanup(func() { config.Instance = oldConfig })
+
+	// IPv6 egress reaches an IPv6-only listener.
+	addr, done := startGreetingServer(t, "tcp6")
+	config.Instance = &config.Config{EgressMode: netutil.ModeIPv6}
+	client, err := Dial(addr, "example.com")
+	if err != nil {
+		t.Fatalf("IPv6 egress dial failed: %v", err)
+	}
+	_ = client.Close()
+	if serverErr := <-done; serverErr != nil {
+		t.Fatalf("greeting server: %v", serverErr)
+	}
+
+	// IPv4 egress must not fall back to the IPv6 address.
+	addr, _ = startGreetingServer(t, "tcp6")
+	config.Instance = &config.Config{EgressMode: netutil.ModeIPv4}
+	if client, err := Dial(addr, "example.com"); err == nil {
+		_ = client.Close()
+		t.Fatal("IPv4 egress dial reached an IPv6-only listener")
+	}
+}
+
+func TestDialUsesBothFamiliesByDefault(t *testing.T) {
+	if !netutil.SupportsIPv4() {
+		t.Skip("no IPv4 loopback on this host")
+	}
+	oldConfig := config.Instance
+	t.Cleanup(func() { config.Instance = oldConfig })
+	config.Instance = &config.Config{}
+
+	addr, done := startGreetingServer(t, "tcp4")
+	client, err := Dial(addr, "example.com")
+	if err != nil {
+		t.Fatalf("dual-stack dial failed: %v", err)
+	}
+	_ = client.Close()
+	if serverErr := <-done; serverErr != nil {
+		t.Fatalf("greeting server: %v", serverErr)
+	}
 }

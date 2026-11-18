@@ -10,6 +10,7 @@ import (
 	"github.com/noelbennettz/imail/utils/async"
 	"github.com/noelbennettz/imail/utils/consts"
 	"github.com/noelbennettz/imail/utils/context"
+	"github.com/noelbennettz/imail/utils/netutil"
 	"github.com/noelbennettz/imail/utils/smtp"
 	log "github.com/sirupsen/logrus"
 	"net"
@@ -99,7 +100,7 @@ func doSend(ctx *context.Context, fromDomain string, data []byte, to []*parsemai
 				// For testing
 				address := mxDomain{
 					domain: "localhost",
-					mxHost: "127.0.0.1",
+					mxHost: netutil.Loopback(config.Instance.ListenMode),
 				}
 				toByDomain[address] = append(toByDomain[address], s)
 			} else {
@@ -115,12 +116,14 @@ func doSend(ctx *context.Context, fromDomain string, data []byte, to []*parsemai
 				if len(mxInfo) > 0 {
 					address = mxDomain{
 						domain: args[1],
-						mxHost: mxInfo[0].Host,
+						mxHost: strings.TrimSuffix(strings.TrimSpace(mxInfo[0].Host), "."),
 					}
-					// Keep all MX hosts (net.LookupMX already sorts by priority)
+					// Keep all MX hosts (net.LookupMX already sorts by priority).
+					// A trailing dot is stripped here so the same name is used for
+					// dialing and for TLS verification.
 					allHosts := make([]string, 0, len(mxInfo))
 					for _, mx := range mxInfo {
-						allHosts = append(allHosts, mx.Host)
+						allHosts = append(allHosts, strings.TrimSuffix(strings.TrimSpace(mx.Host), "."))
 					}
 					mxFailoverMap[args[1]] = allHosts
 				}
@@ -160,7 +163,7 @@ func doSend(ctx *context.Context, fromDomain string, data []byte, to []*parsemai
 			}
 
 			if domain.domain == "localhost" {
-				err := smtp.SendMailUnsafe("", domain.mxHost+":25", nil, from, fromDomain, buildAddress(tos), data)
+				err := smtp.SendMailUnsafe("", smtp.Address(domain.mxHost, 25), nil, from, fromDomain, buildAddress(tos), data)
 				if err != nil {
 					recordFailure(err)
 				}
@@ -171,6 +174,11 @@ func doSend(ctx *context.Context, fromDomain string, data []byte, to []*parsemai
 			mxHosts := mxFailoverMap[domain.domain]
 			if len(mxHosts) == 0 {
 				mxHosts = []string{domain.mxHost}
+			}
+			// RFC 7505: a single "." MX means the domain accepts no mail.
+			if len(mxHosts) == 1 && mxHosts[0] == "" {
+				recordFailure(fmt.Errorf("domain %q publishes a null MX and does not accept mail", domain.domain))
+				return
 			}
 
 			// Try the MX hosts one by one in priority order (RFC 5321 §5.1)
@@ -224,9 +232,12 @@ func isPermanentSMTPResponse(err error) bool {
 // STARTTLS:25 → 587 → 465 → plaintext:25
 func tryDeliverToMX(ctx *context.Context, mxHost, domain, from, fromDomain string, to []string, data []byte) error {
 	mxHost = strings.TrimSuffix(strings.TrimSpace(mxHost), ".")
+	if mxHost == "" {
+		return fmt.Errorf("domain %q publishes a null MX and does not accept mail", domain)
+	}
 	// Verify the MX certificate against the MX hostname. Never fall back to an
 	// unauthenticated TLS connection or plaintext because a certificate failed.
-	err := smtp.SendMail(mxHost, mxHost+":25", nil, from, fromDomain, to, data)
+	err := smtp.SendMail(mxHost, smtp.Address(mxHost, 25), nil, from, fromDomain, to, data)
 	if err == nil {
 		return nil
 	}
@@ -236,7 +247,7 @@ func tryDeliverToMX(ctx *context.Context, mxHost, domain, from, fromDomain strin
 	log.WithContext(ctx).Infof("SMTP STARTTLS on 25 Send Error. %s", err.Error())
 
 	// Port 587 is submission with STARTTLS, not implicit TLS.
-	err = smtp.SendMail(mxHost, mxHost+":587", nil, from, fromDomain, to, data)
+	err = smtp.SendMail(mxHost, smtp.Address(mxHost, 587), nil, from, fromDomain, to, data)
 	if err == nil {
 		return nil
 	}
@@ -246,7 +257,7 @@ func tryDeliverToMX(ctx *context.Context, mxHost, domain, from, fromDomain strin
 	log.WithContext(ctx).Infof("SMTP STARTTLS on 587 Send Error. %s", err.Error())
 
 	// Port 465 is implicit TLS.
-	err = smtp.SendMailWithTls(mxHost, mxHost+":465", nil, from, fromDomain, to, data)
+	err = smtp.SendMailWithTls(mxHost, smtp.Address(mxHost, 465), nil, from, fromDomain, to, data)
 	if err == nil {
 		return nil
 	}

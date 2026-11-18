@@ -6,7 +6,6 @@ import (
 	oerrors "errors"
 	"io"
 	"net"
-	"net/netip"
 	"strings"
 	"time"
 
@@ -229,11 +228,25 @@ func saveEmail(ctx *context.Context, size int, rawMIME []byte, email *parsemail.
 }
 
 func spfCheck(remoteAddress string, sender *parsemail.User, senderString string) bool {
-	// spf validation
-	ipAddress, _ := netip.ParseAddrPort(remoteAddress)
+	// spf validation. The remote address is host:port on both stacks
+	// ("1.2.3.4:25" and "[2001:db8::1]:25"), and an IPv6 zone may be attached.
+	host := remoteAddress
+	if h, _, err := net.SplitHostPort(remoteAddress); err == nil {
+		host = h
+	}
+	if zone := strings.LastIndex(host, "%"); zone >= 0 {
+		host = host[:zone]
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	if ip == nil {
+		log.Debugf("spfCheck: cannot parse remote address %q", remoteAddress)
+		return false
+	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
 
-	ip := net.ParseIP(ipAddress.Addr().String())
-	if ip.IsPrivate() {
+	if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
 		return true
 	}
 

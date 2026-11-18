@@ -24,11 +24,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"github.com/noelbennettz/imail/config"
+	"github.com/noelbennettz/imail/utils/netutil"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"net/smtp"
 	"net/textproto"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -58,14 +60,34 @@ type Client struct {
 	helloError error  // the error from the hello
 }
 
+// egressMode returns the configured outbound address family. An unset value
+// keeps Go's dual-stack behaviour.
+func egressMode() string {
+	if config.Instance != nil && config.Instance.EgressMode != "" {
+		return config.Instance.EgressMode
+	}
+	return netutil.ModeBoth
+}
+
+// Address returns a host:port dial target. DNS records carry a trailing dot
+// and IPv6 literals must be bracketed, so neither is left to the caller.
+func Address(host string, port int) string {
+	host = strings.TrimSuffix(strings.TrimSpace(host), ".")
+	return net.JoinHostPort(host, strconv.Itoa(port))
+}
+
 // Dial returns a new Client connected to an SMTP server at addr.
 // The addr must include a port, as in "mail.example.com:smtp".
 func Dial(addr, fromDomain string) (*Client, error) {
-	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	conn, err := netutil.DialTimeout(egressMode(), addr, 2*time.Second)
 	if err != nil {
 		return nil, err
 	}
-	host, _, _ := net.SplitHostPort(addr)
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
 	return NewClient(conn, host, fromDomain)
 }
 
@@ -80,11 +102,16 @@ func DialTls(addr, domain, fromDomain string) (*Client, error) {
 		ServerName: domain,
 	}
 
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", addr, tlsconfig)
+	dialer := &net.Dialer{Timeout: 2 * time.Second}
+	conn, err := tls.DialWithDialer(dialer, netutil.Network(egressMode()), addr, tlsconfig)
 	if err != nil {
 		return nil, err
 	}
-	host, _, _ := net.SplitHostPort(addr)
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
 	return NewClient(conn, host, fromDomain)
 }
 

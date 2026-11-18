@@ -3,10 +3,14 @@
 package netutil
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Listen modes supported by the server.
@@ -28,8 +32,67 @@ func NormalizeMode(mode string) string {
 	}
 }
 
+var (
+	stackOnce sync.Once
+	hasIPv4   bool
+	hasIPv6   bool
+)
+
+// SupportsIPv4 reports whether this host can bind an IPv4 loopback socket.
+func SupportsIPv4() bool {
+	stackOnce.Do(detectStacks)
+	return hasIPv4
+}
+
+// SupportsIPv6 reports whether this host can bind an IPv6 loopback socket.
+func SupportsIPv6() bool {
+	stackOnce.Do(detectStacks)
+	return hasIPv6
+}
+
+func detectStacks() {
+	hasIPv4 = canListen("tcp4", "127.0.0.1:0")
+	hasIPv6 = canListen("tcp6", "[::1]:0")
+}
+
+func canListen(network, address string) bool {
+	listener, err := net.Listen(network, address)
+	if err != nil {
+		return false
+	}
+	_ = listener.Close()
+	return true
+}
+
+// EffectiveMode downgrades a configured mode to a family this host actually
+// has. A host without IPv6 must not fail because the config says "ipv6".
+func EffectiveMode(mode string) string {
+	return effectiveMode(mode, SupportsIPv4(), SupportsIPv6())
+}
+
+func effectiveMode(mode string, ipv4Available, ipv6Available bool) string {
+	switch NormalizeMode(mode) {
+	case ModeIPv4:
+		if !ipv4Available && ipv6Available {
+			return ModeIPv6
+		}
+		return ModeIPv4
+	case ModeIPv6:
+		if !ipv6Available && ipv4Available {
+			return ModeIPv4
+		}
+		return ModeIPv6
+	default:
+		return ModeBoth
+	}
+}
+
 // Network returns the tcp network name used for net.Listen.
 func Network(mode string) string {
+	return networkFor(EffectiveMode(mode))
+}
+
+func networkFor(mode string) string {
 	switch NormalizeMode(mode) {
 	case ModeIPv4:
 		return "tcp4"
@@ -43,7 +106,7 @@ func Network(mode string) string {
 // Host returns the wildcard host used when binding.
 // An empty host keeps Go's dual-stack wildcard behaviour.
 func Host(mode string) string {
-	switch NormalizeMode(mode) {
+	switch EffectiveMode(mode) {
 	case ModeIPv4:
 		return "0.0.0.0"
 	case ModeIPv6:
@@ -64,7 +127,7 @@ func Address(mode string, port int) string {
 
 // Loopback returns a loopback address reachable in the configured mode.
 func Loopback(mode string) string {
-	if NormalizeMode(mode) == ModeIPv6 {
+	if EffectiveMode(mode) == ModeIPv6 {
 		return "::1"
 	}
 	return "127.0.0.1"
@@ -73,6 +136,29 @@ func Loopback(mode string) string {
 // LoopbackAddress returns host:port for internal health probes.
 func LoopbackAddress(mode string, port int) string {
 	return net.JoinHostPort(Loopback(mode), fmt.Sprintf("%d", port))
+}
+
+// DialTimeout dials addr over the family selected by mode. The mode is the
+// egress mode: "both" keeps Go's Happy Eyeballs behaviour, "ipv4"/"ipv6"
+// force one family so a host with a broken stack does not hang.
+func DialTimeout(mode, addr string, timeout time.Duration) (net.Conn, error) {
+	return DialContext(context.Background(), mode, addr, timeout)
+}
+
+// DialContext is the context-aware variant of DialTimeout.
+func DialContext(ctx context.Context, mode, addr string, timeout time.Duration) (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: timeout}
+	return dialer.DialContext(ctx, Network(mode), addr)
+}
+
+// ProbeClient is used for loopback readiness probes. It ignores proxy
+// environment variables, which would otherwise send 127.0.0.1/[::1] through
+// an HTTP proxy.
+var ProbeClient = &http.Client{
+	Timeout: 3 * time.Second,
+	Transport: &http.Transport{
+		Proxy: nil,
+	},
 }
 
 // BuildTLSConfigMulti applies the TLS 1.2/1.3 policy and strict SNI

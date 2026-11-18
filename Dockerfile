@@ -43,6 +43,6 @@ COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/doc/imail/
 EXPOSE 25 80 110 443 465 587 993 995
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-    CMD wget -qO- "http://127.0.0.1:${HTTP_PORT:-80}/api/ping" >/dev/null 2>&1 || exit 1
+    CMD wget -qO- "http://127.0.0.1:${HTTP_PORT:-80}/api/ping" >/dev/null 2>&1 || wget -qO- "http://[::1]:${HTTP_PORT:-80}/api/ping" >/dev/null 2>&1 || exit 1
 
 CMD ["/work/imail"]

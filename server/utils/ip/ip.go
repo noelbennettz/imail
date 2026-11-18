@@ -2,6 +2,7 @@
 package ip
 
 import (
+	"context"
 	"io"
 	"net"
 	"net/http"
@@ -17,12 +18,29 @@ var (
 	ipv6     string
 )
 
-var client = &http.Client{Timeout: 5 * time.Second}
+// familyClient returns a client whose connections are pinned to one address
+// family. Without the pin a dual-stack host may answer the IPv4 lookup with
+// its IPv6 address (or the other way round), so the A/AAAA guidance would be
+// wrong. Proxies are disabled: the point is to observe this host's own
+// egress address.
+func familyClient(network string, timeout time.Duration) *http.Client {
+	dialer := &net.Dialer{Timeout: timeout}
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			Proxy: nil,
+			DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
+				return dialer.DialContext(ctx, network, addr)
+			},
+		},
+	}
+}
 
 // GetIPv4 returns the public IPv4 address or "" when none is available.
 func GetIPv4() string {
 	ipv4Once.Do(func() {
-		ipv4 = detect("https://api.ipify.org", "https://ipv4.icanhazip.com")
+		ipv4 = detect(familyClient("tcp4", 5*time.Second),
+			"https://api.ipify.org", "https://ipv4.icanhazip.com")
 		if parsed := net.ParseIP(ipv4); parsed == nil || parsed.To4() == nil {
 			ipv4 = ""
 		}
@@ -34,7 +52,8 @@ func GetIPv4() string {
 // connectivity.
 func GetIPv6() string {
 	ipv6Once.Do(func() {
-		ipv6 = detect("https://api6.ipify.org", "https://ipv6.icanhazip.com")
+		ipv6 = detect(familyClient("tcp6", 5*time.Second),
+			"https://api6.ipify.org", "https://ipv6.icanhazip.com")
 		parsed := net.ParseIP(ipv6)
 		if parsed == nil || parsed.To4() != nil {
 			ipv6 = ""
@@ -52,7 +71,7 @@ func GetIp() string {
 	return GetIPv6()
 }
 
-func detect(urls ...string) string {
+func detect(client *http.Client, urls ...string) string {
 	for _, url := range urls {
 		resp, err := client.Get(url)
 		if err != nil {

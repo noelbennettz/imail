@@ -41,6 +41,9 @@ rather than a database export ceremony.
   465, **IMAPS** on 993, **POP3** on 110 (STLS required for authentication) and
   **POP3S** on 995.
 - **Dual-stack listeners**: `listenMode` can be `both`, `ipv4` or `ipv6`.
+  Outbound delivery follows `egressMode` (`both`, `ipv4` or `ipv6`); a
+  configured family the host does not have is detected at startup and the
+  other one is used instead.
 - **TLS 1.2 and TLS 1.3 only**, with strict SNI validation by default. A TLS
   connection with no SNI or an unknown hostname is rejected during the
   handshake. `serverHostnames` adds extra names when needed.
@@ -243,6 +246,23 @@ same numbers on the host. On a rootless Docker host, publish high host ports and
 map them to the container ports (for example `8080:80` and `18443:443`) because
 rootless Docker cannot bind ports below 1024.
 
+### Address families
+
+`listenMode` controls which sockets are bound: `both` (Go’s dual-stack
+wildcard), `ipv4` (`0.0.0.0`) or `ipv6` (`[::]`, IPv6-only). `egressMode`
+controls the family used for outbound SMTP delivery to MX hosts. In `both`
+mode the outbound connection uses Happy Eyeballs, so a destination that only
+publishes an AAAA record is reached over IPv6 and an A-only destination over
+IPv4.
+
+IPv6-only and IPv4-only hosts are supported. If `config.json` requests a family
+the host cannot bind, the server falls back to the available family at startup
+and logs a warning; listeners, readiness probes, the container healthcheck and
+the A/AAAA DNS guidance then all follow the effective family. A host that
+cannot reach one family at all naturally cannot deliver to a destination that
+only exists on that family; the failure is reported as a normal temporary
+delivery error and the next MX is tried.
+
 ### `httpsEnabled`
 
 `httpsEnabled` controls the web listener:
@@ -375,6 +395,7 @@ before editing it; it is written atomically with mode `0600`.
   "httpsPort": 443,
   "isInit": true,
   "listenMode": "both",            // both | ipv4 | ipv6
+  "egressMode": "both",            // family used for outbound delivery
   "tlsMinVersion": "1.2",
   "tlsMaxVersion": "1.3",
   "disableSNICheck": false,
@@ -399,6 +420,11 @@ Notes:
   database is suitable for a single small server.
 - `isInit` is set by the setup wizard. Do not set it manually before completing
   setup unless you are restoring an existing configuration.
+- `listenMode` and `egressMode` are independent: a host may accept mail on both
+  families while sending only over IPv4, for example. Leave both at `both`
+  unless the host has a broken stack or a provider that blocks one family. On a
+  host without IPv6 (or without IPv4) the configured family is downgraded
+  automatically and the reason is logged at startup.
 
 ## Docker and operations
 
@@ -576,6 +602,26 @@ those historical rows may need a one-time correction after upgrading.
 
 Port 110 accepts a generic plaintext greeting but authentication requires
 `STLS` first. Use POP3S on 995, or configure the client to issue `STLS` on 110.
+
+### Mail works on IPv4 but not IPv6 (or the reverse)
+
+Check the effective family in the startup log (`listenMode … listening on …`;
+the line is absent when the configured family is available). Verify the host
+actually has the address and a route:
+
+```bash
+ip -6 addr show scope global
+ip -6 route show default
+curl -6 -sS https://api6.ipify.org     # outbound IPv6
+curl -4 -sS https://api.ipify.org      # outbound IPv4
+```
+
+Then check DNS: an A record is useless for an IPv6-only host and an AAAA record
+is useless for an IPv4-only host. Domains → DNS records shows the addresses the
+server actually detected from its own egress, and the container healthcheck
+probes both loopbacks, so a passing healthcheck does not tell you which family
+is reachable from outside. Test both explicitly, for example
+`nc -6 -vz <server-ipv6> 25` and `nc -4 -vz <server-ipv4> 25`.
 
 ### Docker cannot bind a port
 
