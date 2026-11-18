@@ -292,8 +292,10 @@ notification (bounce) of its own.
 - **No bounce is generated**: a permanently rejected message is reported to the
   submitting client at that moment, not mailed back to the local sender later.
 - **Restart**: nothing is queued, so a restart cannot lose queued mail — and it
-  cannot resume a delivery that was in progress either. The sender is told 451
-  and tries again.
+  cannot resume a delivery that was in progress either. The message is either
+  already accepted (the sender got 250) or still the sender's responsibility: a
+  delivery cut short by a restart looks like a failed connection to the sending
+  server, which retries on its own schedule.
 - **If you need store-and-forward** — retry for days, bounces to the sender,
   per-recipient status — put a real MTA (Postfix, Exim) or a relay in front and
   let it queue; iMail then only delivers what that MTA hands it.
