@@ -90,8 +90,8 @@
       <span class="eyebrow"><span class="dot"></span>自架 · Docker · AGPL-3.0</span>
       <h1>用自己的網域，<br><span class="grad">收發自己的信。</span></h1>
       <p class="lede">
-        給自己網域用的郵件伺服器：SMTP、submission、IMAPS 與 POP3S、網頁信箱與管理台，
-        都在同一個容器裡。所有狀態——設定、資料庫、DKIM 金鑰與憑證——就是一個
+        給自己網域用的郵件伺服器：SMTP 負責收信，submission 給郵件軟體寄信，IMAPS 與 POP3S 負責讀信，
+        再加上網頁信箱與管理台，都在同一個容器裡。所有狀態——設定、資料庫、DKIM 金鑰與憑證——就是一個
         <code>config/</code> 目錄，可以直接複製。
       </p>
       <div class="actions">
