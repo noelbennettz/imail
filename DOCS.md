@@ -46,9 +46,10 @@ shortest install path; this file is the reference for everything else.
 - **Conversation view** loads five messages at a time. Scroll to the bottom or
   press “Load more” to continue. Each message has its own menu for viewing the
   original source or deleting that single message.
-- **Seven UI languages**: English, Simplified Chinese, Traditional Chinese,
-  Arabic, French, Russian and Spanish. All UI assets, including the Inter font,
-  are served locally from the binary.
+- **Seven UI languages** — English, Arabic, Spanish, French, Russian and
+  Simplified Chinese (the six official languages of the United Nations) plus
+  Traditional Chinese. All UI assets, including the Inter font, are served
+  locally from the binary.
 - **SQLite by default**, with MySQL and PostgreSQL schema support for larger
   deployments.
 - **UTC in storage, local time in the browser**: message timestamps are stored
