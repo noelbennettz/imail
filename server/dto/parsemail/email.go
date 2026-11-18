@@ -199,7 +199,6 @@ func (e *Email) BuildBcc2String() string {
 }
 
 func NewEmailFromModel(d models.Email) *Email {
-
 	var To []*User
 	json.Unmarshal([]byte(d.To), &To)
 
@@ -305,7 +304,6 @@ func NewEmailFromReader(to []string, r io.Reader, size int) *Email {
 
 func formatContent(entity *message.Entity, ret *Email) error {
 	contentType, p, err := entity.Header.ContentType()
-
 	if err != nil {
 		log.Errorf("email read error! %+v", err)
 		return err
@@ -370,6 +368,7 @@ func formatContent(entity *message.Entity, ret *Email) error {
 
 	return nil
 }
+
 func getFileName(entity *message.Entity, p map[string]string) string {
 	fileName := p["name"]
 

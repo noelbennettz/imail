@@ -6,15 +6,16 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
+	"os"
+	"strings"
+
 	"github.com/emersion/go-msgauth/dkim"
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/utils/consts"
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ed25519"
-	"io"
-	"os"
-	"strings"
 )
 
 type Dkim struct {
@@ -84,7 +85,6 @@ func (p *Dkim) Sign(msgData string) []byte {
 }
 
 func Check(ctx *context.Context, mail io.Reader) bool {
-
 	verifications, err := dkim.Verify(mail)
 	if err != nil {
 		log.WithContext(ctx).Warnf("DKIM Error:%v", err)

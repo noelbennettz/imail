@@ -3,6 +3,8 @@ package group
 import (
 	errors2 "errors"
 	"fmt"
+	"strings"
+
 	"github.com/noelbennettz/imail/consts"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto"
@@ -12,7 +14,7 @@ import (
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/errors"
 	log "github.com/sirupsen/logrus"
-	"strings"
+
 	"xorm.io/builder"
 )
 
@@ -161,7 +163,6 @@ func buildChildren(ctx *context.Context, parentId int) []*GroupItem {
 	var ret []*GroupItem
 	var rootGroup []*models.Group
 	err := db.Instance.Table("group").Where("parent_id=? and user_id=?", parentId, ctx.UserID).Find(&rootGroup)
-
 	if err != nil {
 		log.WithContext(ctx).Errorf("SQL Error:%v", err)
 	}
@@ -176,19 +177,12 @@ func buildChildren(ctx *context.Context, parentId int) []*GroupItem {
 	}
 
 	return ret
-
 }
 
 func GetGroupList(ctx *context.Context) []*models.Group {
 	var ret []*models.Group
 	db.Instance.Table("group").Where("user_id=?", ctx.UserID).Find(&ret)
 	return ret
-}
-
-func hasChildren(ctx *context.Context, id int) bool {
-	var parent []*models.Group
-	db.Instance.Table("group").Where("parent_id=?", id).Find(&parent)
-	return len(parent) > 0
 }
 
 func getLayerName(ctx *context.Context, item *models.Group, allPath bool) string {
@@ -278,7 +272,6 @@ func GetGroupStatus(ctx *context.Context, groupName string, params []string) (st
 	}
 
 	return fmt.Sprintf("(%s)", ret), retMap
-
 }
 
 func getNextUID(ctx *context.Context, groupName string) int {

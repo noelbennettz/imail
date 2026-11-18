@@ -2,18 +2,21 @@ package imap_server
 
 import (
 	"crypto/tls"
+	"net"
+	"os"
+
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/utils/netutil"
 	"github.com/noelbennettz/imail/utils/tlsutil"
 	log "github.com/sirupsen/logrus"
-	"net"
-	"os"
 )
 
-var instanceTLS *imapserver.Server
-var serverTLSConfig *tls.Config
+var (
+	instanceTLS     *imapserver.Server
+	serverTLSConfig *tls.Config
+)
 
 func Stop() {
 	if instanceTLS != nil {

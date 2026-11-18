@@ -24,7 +24,6 @@ func (c *Context) SetValue(key string, value any) {
 		c.Values = map[string]any{}
 	}
 	c.Values[key] = value
-
 }
 
 func (c *Context) GetValue(key string) any {

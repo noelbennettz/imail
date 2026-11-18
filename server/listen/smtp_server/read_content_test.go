@@ -2,23 +2,24 @@ package smtp_server
 
 import (
 	"bytes"
-	"github.com/noelbennettz/imail/config"
-	"github.com/noelbennettz/imail/db"
-	parsemail2 "github.com/noelbennettz/imail/dto/parsemail"
-	"github.com/noelbennettz/imail/session"
-	"github.com/noelbennettz/imail/utils/context"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/noelbennettz/imail/config"
+	"github.com/noelbennettz/imail/db"
+	parsemail2 "github.com/noelbennettz/imail/dto/parsemail"
+	"github.com/noelbennettz/imail/session"
+	"github.com/noelbennettz/imail/utils/context"
+	log "github.com/sirupsen/logrus"
 )
 
 func testInit() {
 	// Set the log format to json
-	//log.SetFormatter(&log.JSONFormatter{})
+	// log.SetFormatter(&log.JSONFormatter{})
 
 	log.SetReportCaller(true)
 	log.SetFormatter(&log.TextFormatter{
@@ -34,7 +35,7 @@ func testInit() {
 	// Set the log level to warn and above
 	log.SetLevel(log.ErrorLevel)
 
-	var cst, _ = time.LoadLocation("Asia/Shanghai")
+	cst, _ := time.LoadLocation("Asia/Shanghai")
 	time.Local = cst
 
 	wd, _ := os.Getwd()
@@ -141,7 +142,6 @@ PGRpdiBkaXI9Imx0ciI+PGRpdj7mraPmlofmtYvor5UyPC9kaXY+PC9kaXY+DQo=
 	}
 
 	s.Data(bytes.NewReader([]byte(emailData)))
-
 }
 
 func TestImailEmail(t *testing.T) {
@@ -192,7 +192,6 @@ Content-Type: text/html
 	}
 
 	s.Data(bytes.NewReader([]byte(emailData)))
-
 }
 
 func TestRuleForward(t *testing.T) {
@@ -403,7 +402,6 @@ Content-Type: text/html
 	}
 
 	s.Data(bytes.NewReader([]byte(readEmail)))
-
 }
 
 func TestRuleDelete(t *testing.T) {
@@ -452,7 +450,6 @@ Content-Type: text/html
 	}
 
 	s.Data(bytes.NewReader([]byte(deleteEmail)))
-
 }
 
 func TestNullCC(t *testing.T) {

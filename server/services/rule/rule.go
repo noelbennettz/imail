@@ -38,7 +38,6 @@ func GetAllRules(ctx *context.Context, userId int) []*dto.Rule {
 }
 
 func MatchRule(ctx *context.Context, rule *dto.Rule, email *parsemail.Email) bool {
-
 	for _, r := range rule.Rules {
 		var m match.Match
 
@@ -88,7 +87,6 @@ func DoRule(ctx *context.Context, rule *dto.Rule, email *parsemail.Email, user *
 	case dto.MOVE:
 		doMove(ctx, rule, email, user)
 	}
-
 }
 
 func doForward(ctx *context.Context, email *parsemail.Email, forwardAddress string, user *models.User, rawEmailData []byte) error {
@@ -164,7 +162,6 @@ func isLocalDomain(domain string) bool {
 }
 
 func doMove(ctx *context.Context, rule *dto.Rule, email *parsemail.Email, user *models.User) {
-
 	groupId := cast.ToInt(rule.Params)
 	switch groupId {
 	case models.INBOX:
@@ -219,5 +216,4 @@ func doMove(ctx *context.Context, rule *dto.Rule, email *parsemail.Email, user *
 			log.WithContext(ctx).Errorf("sqlERror :%v", err)
 		}
 	}
-
 }

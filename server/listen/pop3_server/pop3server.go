@@ -2,16 +2,19 @@ package pop3_server
 
 import (
 	"crypto/rand"
+	"time"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/third_party/gopop"
 	"github.com/noelbennettz/imail/utils/netutil"
 	"github.com/noelbennettz/imail/utils/tlsutil"
 	log "github.com/sirupsen/logrus"
-	"time"
 )
 
-var instance *gopop.Server
-var instanceTls *gopop.Server
+var (
+	instance    *gopop.Server
+	instanceTls *gopop.Server
+)
 
 // serverGreetingName is deliberately generic: the POP3 greeting must not
 // disclose the configured mail domain.

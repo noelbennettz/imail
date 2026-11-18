@@ -3,6 +3,8 @@ package pop3_server
 import (
 	"database/sql"
 	errors2 "errors"
+	"strings"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/consts"
 	"github.com/noelbennettz/imail/db"
@@ -20,11 +22,9 @@ import (
 	"github.com/noelbennettz/imail/utils/password"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
-	"strings"
 )
 
-type action struct {
-}
+type action struct{}
 
 // Custom non-standard command
 func (a action) Custom(session *gopop.Session, cmd string, args []string) ([]string, error) {
@@ -258,7 +258,6 @@ func (a action) Retr(session *gopop.Session, id int64) (string, int64, error) {
 	ret := parsemail.NewEmailFromModel(email.Email).BuildBytes(session.Ctx.(*context.Context), false)
 	log.WithContext(session.Ctx).Debugf("Retr \n %+v", string(ret))
 	return string(ret), cast.ToInt64(len(ret)), nil
-
 }
 
 // Delete deletes a message
@@ -300,7 +299,6 @@ func (a action) Top(session *gopop.Session, id int64, n int) (string, error) {
 	lines := array.Join(res[0:headerEndLine+n+1], "\n")
 	log.WithContext(session.Ctx).Debugf("Top \n %+v", lines)
 	return lines, nil
-
 }
 
 func (a action) Noop(session *gopop.Session) error {

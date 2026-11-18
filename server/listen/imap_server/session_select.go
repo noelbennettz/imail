@@ -1,10 +1,11 @@
 package imap_server
 
 import (
+	"strings"
+
 	"github.com/emersion/go-imap/v2"
 	"github.com/noelbennettz/imail/services/group"
 	"github.com/spf13/cast"
-	"strings"
 )
 
 func (s *serverSession) Select(mailbox string, options *imap.SelectOptions) (*imap.SelectData, error) {
@@ -28,5 +29,4 @@ func (s *serverSession) Select(mailbox string, options *imap.SelectOptions) (*im
 	}
 
 	return ret, nil
-
 }

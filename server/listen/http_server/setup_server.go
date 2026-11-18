@@ -3,17 +3,18 @@ package http_server
 import (
 	"errors"
 	"flag"
+	"io/fs"
+	"net"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/controllers"
 	"github.com/noelbennettz/imail/utils/ip"
 	"github.com/noelbennettz/imail/utils/netutil"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
-	"io/fs"
-	"net"
-	"net/http"
-	"os"
-	"time"
 )
 
 // Setup wizard server; exits once the setup wizard has finished

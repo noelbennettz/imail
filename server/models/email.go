@@ -42,19 +42,19 @@ type attachments struct {
 	Filename    string
 	ContentType string
 	Index       int
-	//Content     []byte
+	// Content     []byte
 }
 
 func (d *Email) MarshalJSON() ([]byte, error) {
 	type Alias Email
 
-	var allAtt = []attachments{}
-	var showAtt = []attachments{}
+	allAtt := []attachments{}
+	showAtt := []attachments{}
 	if d.Attachments != "" {
 		_ = json.Unmarshal([]byte(d.Attachments), &allAtt)
 		for i, att := range allAtt {
 			att.Index = i
-			//if att.ContentType == "application/octet-stream" {
+			// if att.ContentType == "application/octet-stream" {
 			showAtt = append(showAtt, att)
 			//}
 

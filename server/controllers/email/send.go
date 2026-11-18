@@ -4,6 +4,11 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/parsemail"
@@ -16,10 +21,6 @@ import (
 	"github.com/noelbennettz/imail/utils/send"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
-	"io"
-	"net/http"
-	"strings"
-	"time"
 )
 
 type sendRequest struct {
@@ -239,7 +240,6 @@ func Send(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 			}
 			db.Instance.Insert(&ue)
 		}
-
 	}, nil)
 
 	response.NewSuccessResponse(i18n.GetText(ctx.Lang, "succ")).FPrint(w)

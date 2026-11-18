@@ -1,13 +1,15 @@
 package del_email
 
 import (
+	"log/slog"
+
 	"github.com/noelbennettz/imail/consts"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/models"
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
-	"log/slog"
+
 	"xorm.io/xorm"
 )
 import . "xorm.io/builder"

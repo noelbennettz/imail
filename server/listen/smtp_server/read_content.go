@@ -33,7 +33,6 @@ import (
 const DropUnknownRecipientEmails = true
 
 func (s *Session) Data(r io.Reader) error {
-
 	ctx := s.Ctx
 
 	log.WithContext(ctx).Debugf("Email received")
@@ -56,8 +55,8 @@ func (s *Session) Data(r io.Reader) error {
 		}
 		if email.From.EmailAddress != from.EmailAddress {
 			// The from in the protocol does not match the from in the message content, treat it as spam
-			//log.WithContext(s.Ctx).Infof("Spam, rejecting mail")
-			//return nil
+			// log.WithContext(s.Ctx).Infof("Spam, rejecting mail")
+			// return nil
 		}
 	}
 

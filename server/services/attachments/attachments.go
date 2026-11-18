@@ -22,7 +22,6 @@ func InlineContentType(raw string) (string, bool) {
 }
 
 func GetAttachments(ctx *context.Context, emailId int, cid string) *parsemail.Attachment {
-
 	// Fetch the email content
 	var email models.Email
 	_, err := db.Instance.ID(emailId).Get(&email)
@@ -47,7 +46,6 @@ func GetAttachments(ctx *context.Context, emailId int, cid string) *parsemail.At
 }
 
 func GetAttachmentsByIndex(ctx *context.Context, emailId int, index int) (string, []byte) {
-
 	// Fetch the email content
 	var email models.Email
 	_, err := db.Instance.ID(emailId).Get(&email)

@@ -11,9 +11,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var instance *smtp.Server
-var instanceTls *smtp.Server
-var instanceTlsNew *smtp.Server
+var (
+	instance       *smtp.Server
+	instanceTls    *smtp.Server
+	instanceTlsNew *smtp.Server
+)
 
 // serverGreetingName is deliberately generic: the plaintext greeting must
 // not disclose the configured mail domain.

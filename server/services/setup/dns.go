@@ -2,8 +2,9 @@ package setup
 
 import (
 	"fmt"
-	"github.com/noelbennettz/imail/config"
 	"strings"
+
+	"github.com/noelbennettz/imail/config"
 
 	"github.com/noelbennettz/imail/i18n"
 	"github.com/noelbennettz/imail/services/auth"

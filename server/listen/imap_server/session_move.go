@@ -11,7 +11,6 @@ import (
 )
 
 func (s *serverSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest string) error {
-
 	var emailList []*response.EmailResponseData
 
 	switch numSet.(type) {
@@ -47,7 +46,6 @@ func (s *serverSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest 
 	} else {
 		return move2userbox(s.ctx, mailIds, dest)
 	}
-
 }
 
 func move2defaultbox(ctx *context.Context, mailIds []int, dest string) error {

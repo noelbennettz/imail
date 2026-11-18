@@ -1,8 +1,9 @@
 package array
 
 import (
-	"github.com/spf13/cast"
 	"strings"
+
+	"github.com/spf13/cast"
 )
 
 func Join[T any](arg []T, str string) string {
@@ -25,7 +26,7 @@ func Unique[T comparable](slice []T) []T {
 		mp[v] = true
 	}
 	ret := []T{}
-	for t, _ := range mp {
+	for t := range mp {
 		ret = append(ret, t)
 	}
 	return ret

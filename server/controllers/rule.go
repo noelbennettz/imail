@@ -2,6 +2,10 @@ package controllers
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"strconv"
+
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto"
 	"github.com/noelbennettz/imail/dto/response"
@@ -13,9 +17,6 @@ import (
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/errors"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"net/http"
-	"strconv"
 )
 
 func GetRule(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
@@ -24,7 +25,6 @@ func GetRule(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 }
 
 func UpsertRule(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
-
 	requestBody, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.WithContext(ctx).Errorf("ReadError:%v", err)
@@ -75,7 +75,6 @@ func UpsertRule(ctx *context.Context, w http.ResponseWriter, req *http.Request) 
 }
 
 func save(ctx *context.Context, p *models.Rule) error {
-
 	if p.Id > 0 {
 		_, err := db.Instance.Exec(db.WithContext(ctx, "update rule set name=? ,value = ? ,action = ?,params = ?,sort = ? where id = ? and user_id = ?"), p.Name, p.Value, p.Action, p.Params, p.Sort, p.Id, ctx.UserID)
 		if err != nil {
@@ -89,7 +88,6 @@ func save(ctx *context.Context, p *models.Rule) error {
 		}
 		return nil
 	}
-
 }
 
 type delRuleReq struct {

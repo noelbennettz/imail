@@ -26,7 +26,6 @@ func GetDatabaseSettings(ctx *context.Context) (string, string, error) {
 }
 
 func GetAdminPassword(ctx *context.Context) (string, error) {
-
 	users := []*models.User{}
 	err := db.Instance.Find(&users)
 	if err != nil {

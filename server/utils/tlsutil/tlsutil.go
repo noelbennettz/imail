@@ -30,7 +30,7 @@ func LoadDomainCertificate(domain string) (*tls.Certificate, bool) {
 	if err != nil {
 		return nil, false
 	}
-	_ = os.Chmod(keyPath, 0600)
+	_ = os.Chmod(keyPath, 0o600)
 	return &cert, true
 }
 
@@ -43,7 +43,7 @@ func ServerConfig() *tls.Config {
 	var fallback *tls.Certificate
 	if cert, err := tls.LoadX509KeyPair(cfg.SSLPublicKeyPath, cfg.SSLPrivateKeyPath); err == nil {
 		fallback = &cert
-		_ = os.Chmod(cfg.SSLPrivateKeyPath, 0600)
+		_ = os.Chmod(cfg.SSLPrivateKeyPath, 0o600)
 	}
 
 	byName := map[string]*tls.Certificate{}

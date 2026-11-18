@@ -2,12 +2,13 @@ package email
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+
 	"github.com/noelbennettz/imail/dto/response"
 	"github.com/noelbennettz/imail/services/del_email"
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"net/http"
 )
 
 type emailDeleteRequest struct {
@@ -37,5 +38,4 @@ func EmailDelete(ctx *context.Context, w http.ResponseWriter, req *http.Request)
 		return
 	}
 	response.NewSuccessResponse("success").FPrint(w)
-
 }

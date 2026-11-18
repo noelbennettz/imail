@@ -3,6 +3,13 @@ package http_server
 import (
 	"embed"
 	"errors"
+	olog "log"
+	"net"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/controllers"
 	"github.com/noelbennettz/imail/dto/response"
@@ -12,12 +19,6 @@ import (
 	"github.com/noelbennettz/imail/utils/id"
 	"github.com/noelbennettz/imail/utils/netutil"
 	"github.com/noelbennettz/imail/utils/tlsutil"
-	olog "log"
-	"net"
-	"net/http"
-	"net/url"
-	"strings"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -27,15 +28,13 @@ var local embed.FS
 
 var httpsServer *http.Server
 
-type nullWrite struct {
-}
+type nullWrite struct{}
 
 func (w *nullWrite) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
 func HttpsStart() {
-
 	mux := http.NewServeMux()
 
 	router(mux)

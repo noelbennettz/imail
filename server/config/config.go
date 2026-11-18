@@ -10,16 +10,17 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/noelbennettz/imail/utils/context"
-	"github.com/noelbennettz/imail/utils/errors"
-	"github.com/noelbennettz/imail/utils/file"
-	"github.com/noelbennettz/imail/utils/netutil"
-	log "github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/noelbennettz/imail/utils/context"
+	"github.com/noelbennettz/imail/utils/errors"
+	"github.com/noelbennettz/imail/utils/file"
+	"github.com/noelbennettz/imail/utils/netutil"
+	log "github.com/sirupsen/logrus"
 )
 
 var IsInit bool
@@ -209,19 +210,20 @@ func (c *Config) SetSetupPort(setupPort int) {
 	c.setupPort = setupPort
 }
 
-const DBTypeMySQL = "mysql"
-const DBTypeSQLite = "sqlite"
-const DBTypePostgres = "postgres"
-const SSLTypeAutoHTTP = "0" // Auto-generated certificate
-const SSLTypeAutoDNS = "2"  // Auto-generated certificate validated via DNS API
-const SSLTypeUser = "1"     // User-uploaded certificate
+const (
+	DBTypeMySQL     = "mysql"
+	DBTypeSQLite    = "sqlite"
+	DBTypePostgres  = "postgres"
+	SSLTypeAutoHTTP = "0" // Auto-generated certificate
+	SSLTypeAutoDNS  = "2" // Auto-generated certificate validated via DNS API
+	SSLTypeUser     = "1" // User-uploaded certificate
+)
 
 var DBTypes []string = []string{DBTypeMySQL, DBTypeSQLite, DBTypePostgres}
 
 var Instance *Config = &Config{}
 
-type logFormatter struct {
-}
+type logFormatter struct{}
 
 // Format defines the log output format
 func (l *logFormatter) Format(entry *log.Entry) ([]byte, error) {
@@ -321,7 +323,6 @@ func Init() {
 	} else {
 		log.SetLevel(log.InfoLevel)
 	}
-
 }
 
 func ReadPrivateKey() (*ecdsa.PrivateKey, bool) {
@@ -346,7 +347,7 @@ func createNewPrivateKey() *ecdsa.PrivateKey {
 	x509Encoded, _ := x509.MarshalECPrivateKey(privateKey)
 
 	// Write the EC key to a PEM file
-	keypem, _ := os.OpenFile(ROOT_PATH+"./config/ssl/account_private.pem", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keypem, _ := os.OpenFile(ROOT_PATH+"./config/ssl/account_private.pem", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	err = pem.Encode(keypem, &pem.Block{Type: "EC PRIVATE KEY", Bytes: x509Encoded})
 	if err != nil {
 		panic(err)
@@ -363,12 +364,12 @@ func WriteConfig(cfg *Config) error {
 	}
 	configWriteMu.Lock()
 	defer configWriteMu.Unlock()
-	if err := os.MkdirAll(ROOT_PATH+"/config/", 0700); err != nil {
+	if err := os.MkdirAll(ROOT_PATH+"/config/", 0o700); err != nil {
 		return errors.Wrap(err)
 	}
 	path := ROOT_PATH + "./config/config.json"
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, bytes, 0600); err != nil {
+	if err := os.WriteFile(tmp, bytes, 0o600); err != nil {
 		return errors.Wrap(err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
@@ -386,8 +387,8 @@ func ReadConfig() (*Config, error) {
 	}
 	if !file.PathExist(ROOT_PATH + "./config/config.json") {
 		bytes, _ := json.Marshal(configData)
-		_ = os.MkdirAll(ROOT_PATH+"/config/", 0700)
-		err := os.WriteFile(ROOT_PATH+"./config/config.json", bytes, 0600)
+		_ = os.MkdirAll(ROOT_PATH+"/config/", 0o700)
+		err := os.WriteFile(ROOT_PATH+"./config/config.json", bytes, 0o600)
 		if err != nil {
 			log.Errorf("Write Config Error:%s", err.Error())
 			return nil, errors.Wrap(err)
@@ -398,7 +399,7 @@ func ReadConfig() (*Config, error) {
 			log.Errorf("Read Config Error:%s", err.Error())
 			return nil, errors.Wrap(err)
 		}
-		_ = os.Chmod(ROOT_PATH+"./config/config.json", 0600)
+		_ = os.Chmod(ROOT_PATH+"./config/config.json", 0o600)
 
 		err = json.Unmarshal(cfgData, &configData)
 		configData.ApplyDefaults()

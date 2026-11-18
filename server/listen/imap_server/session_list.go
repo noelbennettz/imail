@@ -1,13 +1,14 @@
 package imap_server
 
 import (
+	"strings"
+
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/models"
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
-	"strings"
 )
 
 func matchGroup(ctx *context.Context, w *imapserver.ListWriter, basePath, pattern string) {
@@ -68,7 +69,6 @@ func matchGroup(ctx *context.Context, w *imapserver.ListWriter, basePath, patter
 		w.WriteList(data)
 
 	}
-
 }
 
 func hasChildren(ctx *context.Context, id int) bool {
@@ -76,6 +76,7 @@ func hasChildren(ctx *context.Context, id int) bool {
 	db.Instance.Table("group").Where("parent_id=?", id).Find(&parent)
 	return len(parent) > 0
 }
+
 func getLayerName(ctx *context.Context, item *models.Group, allPath bool) string {
 	if item.ParentId == 0 {
 		return item.Name

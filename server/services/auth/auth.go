@@ -7,14 +7,15 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/models"
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 // HasAuth checks whether the current user has auth for an email
@@ -50,7 +51,6 @@ func DkimGen() string {
 	)
 
 	privKey, err = rsa.GenerateKey(rand.Reader, 2048)
-
 	if err != nil {
 		log.Fatalf("Failed to generate key: %v", err)
 	}
@@ -60,8 +60,8 @@ func DkimGen() string {
 		log.Fatalf("Failed to marshal private key: %v", err)
 	}
 
-	_ = os.MkdirAll(filepath.Dir(privatePath), 0700)
-	f, err := os.OpenFile(privatePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	_ = os.MkdirAll(filepath.Dir(privatePath), 0o700)
+	f, err := os.OpenFile(privatePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		log.Fatalf("Failed to create key file: %v", err)
 	}
@@ -104,7 +104,7 @@ func DkimGen() string {
 
 	publicKey := strings.Join(params, "; ")
 
-	os.WriteFile(publicPath, []byte(publicKey), 0644)
+	os.WriteFile(publicPath, []byte(publicKey), 0o644)
 
 	return publicKey
 }

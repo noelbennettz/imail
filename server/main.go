@@ -15,7 +15,6 @@ var (
 )
 
 func main() {
-
 	config.Init()
 
 	if version == "" {
@@ -37,5 +36,4 @@ func main() {
 	res_init.Init(version)
 
 	log.Warnf("Server Stoped \n")
-
 }

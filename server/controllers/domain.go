@@ -21,8 +21,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var domainMu sync.Mutex
-var domainPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
+var (
+	domainMu      sync.Mutex
+	domainPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$`)
+)
 
 type domainView struct {
 	Domain  string `json:"domain"`

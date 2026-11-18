@@ -2,11 +2,11 @@ package ssl
 
 import (
 	"sync"
+	"time"
 
 	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
-	"time"
 )
 
 type authInfo struct {
@@ -20,8 +20,10 @@ type HttpChallenge struct {
 	AuthInfo map[string]*authInfo
 }
 
-var instance *HttpChallenge
-var challengeInitMu sync.Mutex
+var (
+	instance        *HttpChallenge
+	challengeInitMu sync.Mutex
+)
 
 func (h *HttpChallenge) Present(domain, token, keyAuth string) error {
 	h.mu.Lock()

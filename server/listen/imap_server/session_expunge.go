@@ -1,11 +1,12 @@
 package imap_server
 
 import (
+	"log/slog"
+
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/noelbennettz/imail/services/del_email"
 	"github.com/spf13/cast"
-	"log/slog"
 )
 
 func (s *serverSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) error {

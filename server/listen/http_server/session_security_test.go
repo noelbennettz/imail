@@ -36,7 +36,8 @@ func newAuthFixture(t *testing.T) *authFixture {
 	if err := engine.Sync2(&models.User{}); err != nil {
 		t.Fatal(err)
 	}
-	f := &authFixture{db: engine,
+	f := &authFixture{
+		db:     engine,
 		admin:  models.User{Account: "admin", Password: password.Encode("initial-password"), IsAdmin: 1},
 		member: models.User{Account: "member", Password: password.Encode("initial-password")},
 	}

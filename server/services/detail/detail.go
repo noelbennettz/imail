@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/parsemail"
 	"github.com/noelbennettz/imail/dto/response"
@@ -13,7 +15,6 @@ import (
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/errors"
 	log "github.com/sirupsen/logrus"
-	"strings"
 )
 import . "xorm.io/builder"
 

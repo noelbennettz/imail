@@ -143,7 +143,7 @@ func IssueForDomain(domain, mode, provider, token string) error {
 	}
 
 	keyPath, certPath := tlsutil.DomainCertPaths(domain)
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil {
 		return errors.Wrap(err)
 	}
 	domains := []string{domain, "smtp." + domain, "imap." + domain, "pop." + domain}
@@ -210,13 +210,13 @@ func UploadDomainCertificate(domain, keyPEM, certPEM string) error {
 		return errors.Wrap(err)
 	}
 	keyPath, certPath := tlsutil.DomainCertPaths(domain)
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil {
 		return errors.Wrap(err)
 	}
-	if err := os.WriteFile(keyPath, []byte(keyPEM), 0600); err != nil {
+	if err := os.WriteFile(keyPath, []byte(keyPEM), 0o600); err != nil {
 		return errors.Wrap(err)
 	}
-	if err := os.WriteFile(certPath, []byte(certPEM), 0644); err != nil {
+	if err := os.WriteFile(certPath, []byte(certPEM), 0o644); err != nil {
 		return errors.Wrap(err)
 	}
 	if cfg.DomainCertificates == nil {
@@ -282,15 +282,15 @@ func obtainCertificate(cfg *config.Config, domains []string, sslType, provider, 
 		setStatus(StatusError, obtainErr.Error())
 		return errors.Wrap(obtainErr)
 	}
-	if writeErr := os.WriteFile(keyPath, certificates.PrivateKey, 0600); writeErr != nil {
+	if writeErr := os.WriteFile(keyPath, certificates.PrivateKey, 0o600); writeErr != nil {
 		setStatus(StatusError, writeErr.Error())
 		return errors.Wrap(writeErr)
 	}
-	if writeErr := os.WriteFile(certPath, certificates.Certificate, 0644); writeErr != nil {
+	if writeErr := os.WriteFile(certPath, certificates.Certificate, 0o644); writeErr != nil {
 		setStatus(StatusError, writeErr.Error())
 		return errors.Wrap(writeErr)
 	}
-	_ = os.WriteFile(issuerPath, certificates.IssuerCertificate, 0644)
+	_ = os.WriteFile(issuerPath, certificates.IssuerCertificate, 0o644)
 	setStatus(StatusSuccess, "Certificate issued.")
 	time.Sleep(2 * time.Second)
 	signal.RestartChan <- true

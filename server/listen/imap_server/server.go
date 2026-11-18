@@ -1,12 +1,12 @@
 package imap_server
 
 import (
+	"time"
+
 	"github.com/emersion/go-imap/v2"
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/id"
 	log "github.com/sirupsen/logrus"
-	"sync"
-	"time"
 
 	"github.com/emersion/go-imap/v2/imapserver"
 )
@@ -14,9 +14,7 @@ import (
 // Server is a server instance.
 //
 // A server contains a list of users.
-type Server struct {
-	mutex sync.Mutex
-}
+type Server struct{}
 
 // NewServer creates a new server.
 func NewServer() *Server {

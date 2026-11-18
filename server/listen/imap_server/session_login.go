@@ -2,6 +2,8 @@ package imap_server
 
 import (
 	"database/sql"
+	"strings"
+
 	"github.com/emersion/go-imap/v2"
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
@@ -9,7 +11,6 @@ import (
 	"github.com/noelbennettz/imail/utils/errors"
 	"github.com/noelbennettz/imail/utils/password"
 	log "github.com/sirupsen/logrus"
-	"strings"
 )
 
 func (s *serverSession) Login(username, pwd string) error {

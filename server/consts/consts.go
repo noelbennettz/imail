@@ -6,16 +6,16 @@ const (
 	// EmailTypeReceive incoming mail
 	EmailTypeReceive int8 = 0
 
-	//EmailStatusWait 0 = not sent
+	// EmailStatusWait 0 = not sent
 	EmailStatusWait int8 = 0
 
-	//EmailStatusSent 1 = sent
+	// EmailStatusSent 1 = sent
 	EmailStatusSent int8 = 1
 
-	//EmailStatusFail 2 = send failed
+	// EmailStatusFail 2 = send failed
 	EmailStatusFail int8 = 2
 
-	//EmailStatusDel 3 = deleted
+	// EmailStatusDel 3 = deleted
 	EmailStatusDel int8 = 3
 
 	// EmailStatusDrafts draft

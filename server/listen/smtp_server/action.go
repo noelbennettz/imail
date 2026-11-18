@@ -3,6 +3,9 @@ package smtp_server
 import (
 	"database/sql"
 	"errors"
+	"net"
+	"strings"
+
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
 	"github.com/noelbennettz/imail/config"
@@ -12,15 +15,12 @@ import (
 	"github.com/noelbennettz/imail/utils/id"
 	"github.com/noelbennettz/imail/utils/password"
 	log "github.com/sirupsen/logrus"
-	"net"
-	"strings"
 )
 
 // The Backend implements SMTP server methods.
 type Backend struct{}
 
 func (bkd *Backend) NewSession(conn *smtp.Conn) (smtp.Session, error) {
-
 	remoteAddress := conn.Conn().RemoteAddr()
 	ctx := &context.Context{}
 	ctx.SetValue(context.LogID, id.GenLogID())

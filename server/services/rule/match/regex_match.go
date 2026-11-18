@@ -23,7 +23,6 @@ func (r *RegexMatch) Match(ctx *context.Context, email *parsemail.Email) bool {
 	content := getFieldContent(r.Field, email)
 	re := regexp2.MustCompile(r.Rule, 0)
 	match, err := re.MatchString(content)
-
 	if err != nil {
 		log.WithContext(ctx).Errorf("rule regex error %v", err)
 	}

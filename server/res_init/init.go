@@ -2,10 +2,10 @@ package res_init
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"os"
 	"time"
-
-	"fmt"
 
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
@@ -21,11 +21,9 @@ import (
 	"github.com/noelbennettz/imail/utils/netutil"
 	log "github.com/sirupsen/logrus"
 	// Added: HTTP readiness probe
-	"net/http"
 )
 
 func Init(serverVersion string) {
-
 	if !config.IsInit {
 		dirInit()
 
@@ -91,26 +89,25 @@ func Init(serverVersion string) {
 		time.Sleep(5 * time.Second)
 
 	}
-
 }
 
 func dirInit() {
 	if !file.PathExist("./config") {
-		err := os.MkdirAll("./config", 0744)
+		err := os.MkdirAll("./config", 0o744)
 		if err != nil {
 			panic(err)
 		}
 	}
 
 	if !file.PathExist("./config/dkim") {
-		err := os.MkdirAll("./config/dkim", 0744)
+		err := os.MkdirAll("./config/dkim", 0o744)
 		if err != nil {
 			panic(err)
 		}
 	}
 
 	if !file.PathExist("./config/ssl") {
-		err := os.MkdirAll("./config/ssl", 0744)
+		err := os.MkdirAll("./config/ssl", 0o744)
 		if err != nil {
 			panic(err)
 		}

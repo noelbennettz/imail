@@ -4,13 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/noelbennettz/imail/config"
-	"github.com/noelbennettz/imail/db"
-	"github.com/noelbennettz/imail/dto/response"
-	"github.com/noelbennettz/imail/models"
-	"github.com/noelbennettz/imail/signal"
-	"github.com/noelbennettz/imail/utils/array"
-	"github.com/spf13/cast"
 	"io"
 	"net"
 	"net/http"
@@ -20,6 +13,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/noelbennettz/imail/config"
+	"github.com/noelbennettz/imail/db"
+	"github.com/noelbennettz/imail/dto/response"
+	"github.com/noelbennettz/imail/models"
+	"github.com/noelbennettz/imail/signal"
+	"github.com/noelbennettz/imail/utils/array"
+	"github.com/spf13/cast"
 )
 
 var httpClient *http.Client
@@ -114,7 +115,6 @@ func TestMaster(t *testing.T) {
 	// Check rule execution
 	t.Run("testCheckRule", testCheckRule)
 	time.Sleep(3 * time.Second)
-
 }
 
 func testCheckRule(t *testing.T) {
@@ -139,7 +139,6 @@ func testGetEmailDetail(t *testing.T) {
 	if data.ErrorNo != 0 {
 		t.Error("GetEmailDetail Error! ", data)
 	}
-
 }
 
 func testCreateRule(t *testing.T) {
@@ -176,7 +175,6 @@ func testCreateRule(t *testing.T) {
 	if len(dt) != 1 {
 		t.Error("Rule List Is Empty!")
 	}
-
 }
 
 func testCreateGroup(t *testing.T) {
@@ -242,7 +240,6 @@ func testEditUser(t *testing.T) {
 	if data.ErrorNo != 0 {
 		t.Error("Edit User Api Error!", data)
 	}
-
 }
 
 func testCreateUser(t *testing.T) {
@@ -294,7 +291,6 @@ func testCreateUser(t *testing.T) {
 	if data.ErrorNo != 0 {
 		t.Error("Create User Api Error!")
 	}
-
 }
 
 func testPort(t *testing.T) {
@@ -303,11 +299,9 @@ func testPort(t *testing.T) {
 	} else {
 		t.Log("port check passed")
 	}
-
 }
 
 func testDataBaseSet(t *testing.T) {
-
 	// Read back the configuration
 	ret, err := http.Post(TestHost+"/api/setup", "application/json", strings.NewReader("{\"action\":\"get\",\"step\":\"database\"}"))
 	if err != nil {
@@ -373,7 +367,6 @@ func testDataBaseSet(t *testing.T) {
 }
 
 func testPwdSet(t *testing.T) {
-
 	// Read back the configuration
 	ret, err := http.Post(TestHost+"/api/setup", "application/json", strings.NewReader("{\"action\":\"get\",\"step\":\"password\"}"))
 	if err != nil {
@@ -635,7 +628,6 @@ func testSendEmail2User2ForSpam(t *testing.T) {
 	}
 
 	t.Logf("testSendEmail2User2ForMove Success! Response: %+v", data)
-
 }
 
 func testSendEmail2User2ForMove(t *testing.T) {
@@ -672,7 +664,6 @@ func testSendEmail2User2ForMove(t *testing.T) {
 	}
 
 	t.Logf("testSendEmail2User2ForMove Success! Response: %+v", data)
-
 }
 
 func genTestEmailData(t *testing.T) {
@@ -711,7 +702,6 @@ func genTestEmailData(t *testing.T) {
 		}
 		time.Sleep(3 * time.Second)
 	}
-
 }
 
 func testSendEmail2User12(t *testing.T) {
@@ -860,7 +850,6 @@ func testSendEmail2User3(t *testing.T) {
 	}
 
 	t.Logf("testSendEmail2User3 Success! Response: %+v", data)
-
 }
 
 func testEmailList(t *testing.T) {
@@ -910,7 +899,6 @@ func testUser2EmailList(t *testing.T) {
 	}
 
 	t.Logf("testUser2EmailList Success! Response: %+v", data)
-
 }
 
 func testDelEmail(t *testing.T) {

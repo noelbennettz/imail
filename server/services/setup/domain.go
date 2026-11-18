@@ -2,11 +2,11 @@ package setup
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/utils/array"
 	"github.com/noelbennettz/imail/utils/errors"
-	"strings"
 )
 
 func GetDomainSettings() (string, string, []string, error) {

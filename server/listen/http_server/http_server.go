@@ -2,16 +2,17 @@ package http_server
 
 import (
 	"errors"
+	"io/fs"
+	"net"
+	"net/http"
+	"time"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/controllers"
 	"github.com/noelbennettz/imail/controllers/email"
 	"github.com/noelbennettz/imail/session"
 	"github.com/noelbennettz/imail/utils/netutil"
 	log "github.com/sirupsen/logrus"
-	"io/fs"
-	"net"
-	"net/http"
-	"time"
 )
 
 // This server intercepts http requests and redirects them to https
@@ -66,7 +67,6 @@ func router(mux *http.ServeMux) {
 	mux.HandleFunc("/api/domain/ssl/records", contextIterceptor(controllers.SSLChallengeRecords))
 	mux.HandleFunc("/api/domain/ssl/upload", contextIterceptor(controllers.SSLUpload))
 	mux.HandleFunc("/api/system/restart", contextIterceptor(controllers.RestartServer))
-
 }
 
 func securityHeaders(next http.Handler) http.Handler {

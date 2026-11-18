@@ -1,8 +1,9 @@
 package utf7_test
 
 import (
-	"github.com/noelbennettz/imail/utils/utf7"
 	"testing"
+
+	"github.com/noelbennettz/imail/utils/utf7"
 )
 
 var encode = []struct {
@@ -83,8 +84,10 @@ var encode = []struct {
 	{"\x00\x1F\x7F\u0080&", "&AAAAHwB,AIA-&-", true},
 
 	// Russian
-	{"\u041C\u0430\u043A\u0441\u0438\u043C \u0425\u0438\u0442\u0440\u043E\u0432",
-		"&BBwEMAQ6BEEEOAQ8- &BCUEOARCBEAEPgQy-", true},
+	{
+		"\u041C\u0430\u043A\u0441\u0438\u043C \u0425\u0438\u0442\u0440\u043E\u0432",
+		"&BBwEMAQ6BEEEOAQ8- &BCUEOARCBEAEPgQy-", true,
+	},
 
 	// RFC 3501
 	{"~peter/mail/\u53F0\u5317/\u65E5\u672C\u8A9E", "~peter/mail/&U,BTFw-/&ZeVnLIqe-", true},

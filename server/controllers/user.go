@@ -2,6 +2,12 @@ package controllers
 
 import (
 	"encoding/json"
+	"io"
+	"math"
+	"net/http"
+	"regexp"
+	"strings"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/response"
@@ -12,11 +18,6 @@ import (
 	"github.com/noelbennettz/imail/utils/password"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
-	"io"
-	"math"
-	"net/http"
-	"regexp"
-	"strings"
 )
 
 type userCreateRequest struct {
@@ -64,7 +65,6 @@ func viewOf(user models.User) userView {
 }
 
 func CreateUser(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
-
 	if !ctx.IsAdmin {
 		response.NewErrorResponse(response.NoAccessPrivileges, "No Access Privileges", "").FPrint(w)
 		return
@@ -167,11 +167,9 @@ func UserList(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		"total_page":   cast.ToInt(math.Ceil(cast.ToFloat64(totalNum) / cast.ToFloat64(reqData.PageSize))),
 		"list":         views,
 	}).FPrint(w)
-
 }
 
 func Info(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
-
 	domains := config.Instance.Domains
 	domains = array.Difference(domains, []string{config.Instance.Domain})
 	domains = append([]string{config.Instance.Domain}, domains...)
@@ -192,7 +190,6 @@ func Info(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 }
 
 func EditUser(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
-
 	if !ctx.IsAdmin {
 		response.NewErrorResponse(response.NoAccessPrivileges, "No Access Privileges", "").FPrint(w)
 		return
@@ -264,7 +261,6 @@ func EditUser(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		update.Incr("auth_version")
 	}
 	num, err := update.Update(updates)
-
 	if err != nil {
 		response.NewErrorResponse(response.ServerError, err.Error(), "").FPrint(w)
 		return

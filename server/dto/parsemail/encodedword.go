@@ -8,11 +8,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"golang.org/x/text/encoding/simplifiedchinese"
 	"io"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 // A WordEncoder is an RFC 2047 encoded-word encoder.
@@ -25,9 +26,7 @@ const (
 	QEncoding = WordEncoder('q')
 )
 
-var (
-	errInvalidWord = errors.New("mime: invalid RFC 2047 encoded-word")
-)
+var errInvalidWord = errors.New("mime: invalid RFC 2047 encoded-word")
 
 // Encode returns the encoded-word form of s. If s is ASCII without special
 // characters, it is returned unchanged. The provided charset is the IANA

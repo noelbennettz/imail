@@ -5,6 +5,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/tls"
 	"crypto/x509"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/noelbennettz/imail/config"
@@ -14,11 +20,6 @@ import (
 	"github.com/noelbennettz/imail/utils/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/lego"
@@ -65,9 +66,11 @@ func setStatus(state, message string) {
 func (u *MyUser) GetEmail() string {
 	return u.Email
 }
+
 func (u MyUser) GetRegistration() *registration.Resource {
 	return u.Registration
 }
+
 func (u *MyUser) GetPrivateKey() crypto.PrivateKey {
 	return u.key
 }
@@ -172,19 +175,19 @@ func renewCertificate(privateKey *ecdsa.PrivateKey, cfg *config.Config) error {
 		setStatus(StatusError, err.Error())
 		return errors.Wrap(err)
 	}
-	err = os.WriteFile(cfg.SSLPrivateKeyPath, certificates.PrivateKey, 0600)
+	err = os.WriteFile(cfg.SSLPrivateKeyPath, certificates.PrivateKey, 0o600)
 	if err != nil {
 		setStatus(StatusError, err.Error())
 		return errors.Wrap(err)
 	}
 
-	err = os.WriteFile(cfg.SSLPublicKeyPath, certificates.Certificate, 0644)
+	err = os.WriteFile(cfg.SSLPublicKeyPath, certificates.Certificate, 0o644)
 	if err != nil {
 		setStatus(StatusError, err.Error())
 		return errors.Wrap(err)
 	}
 
-	err = os.WriteFile(filepath.Join(filepath.Dir(cfg.SSLPublicKeyPath), "issuerCert.crt"), certificates.IssuerCertificate, 0644)
+	err = os.WriteFile(filepath.Join(filepath.Dir(cfg.SSLPublicKeyPath), "issuerCert.crt"), certificates.IssuerCertificate, 0o644)
 	if err != nil {
 		setStatus(StatusError, err.Error())
 		return errors.Wrap(err)
@@ -291,19 +294,19 @@ func generateCertificate(privateKey *ecdsa.PrivateKey, cfg *config.Config, newAc
 			return
 		}
 		log.Infof("Certificate verification passed!")
-		err = os.WriteFile(cfg.SSLPrivateKeyPath, certificates.PrivateKey, 0600)
+		err = os.WriteFile(cfg.SSLPrivateKeyPath, certificates.PrivateKey, 0o600)
 		if err != nil {
 			setStatus(StatusError, err.Error())
 			return
 		}
 
-		err = os.WriteFile(cfg.SSLPublicKeyPath, certificates.Certificate, 0644)
+		err = os.WriteFile(cfg.SSLPublicKeyPath, certificates.Certificate, 0o644)
 		if err != nil {
 			setStatus(StatusError, err.Error())
 			return
 		}
 
-		err = os.WriteFile(filepath.Join(filepath.Dir(cfg.SSLPublicKeyPath), "issuerCert.crt"), certificates.IssuerCertificate, 0644)
+		err = os.WriteFile(filepath.Join(filepath.Dir(cfg.SSLPublicKeyPath), "issuerCert.crt"), certificates.IssuerCertificate, 0o644)
 		if err != nil {
 			setStatus(StatusError, err.Error())
 			return
@@ -318,14 +321,12 @@ func generateCertificate(privateKey *ecdsa.PrivateKey, cfg *config.Config, newAc
 				signal.RestartChan <- true
 			}()
 		}
-
 	}, nil)
 
 	return nil
 }
 
 func GenSSL(update bool) error {
-
 	cfg, err := config.ReadConfig()
 	if err != nil {
 		panic(err)
@@ -417,10 +418,10 @@ func UploadCertificate(keyPEM, certPEM string) error {
 	if err != nil {
 		return errors.Wrap(err)
 	}
-	if err := os.WriteFile(cfg.SSLPrivateKeyPath, []byte(keyPEM), 0600); err != nil {
+	if err := os.WriteFile(cfg.SSLPrivateKeyPath, []byte(keyPEM), 0o600); err != nil {
 		return errors.Wrap(err)
 	}
-	if err := os.WriteFile(cfg.SSLPublicKeyPath, []byte(certPEM), 0644); err != nil {
+	if err := os.WriteFile(cfg.SSLPublicKeyPath, []byte(certPEM), 0o644); err != nil {
 		return errors.Wrap(err)
 	}
 	cfg.SSLType = config.SSLTypeUser
@@ -431,8 +432,8 @@ func UploadCertificate(keyPEM, certPEM string) error {
 	setStatus(StatusSuccess, "Certificate uploaded.")
 	return nil
 }
-func CheckSSLCrtInfo() (int, time.Time, bool, error) {
 
+func CheckSSLCrtInfo() (int, time.Time, bool, error) {
 	cfg, err := config.ReadConfig()
 	if err != nil {
 		panic(err)
@@ -444,7 +445,6 @@ func CheckSSLCrtInfo() (int, time.Time, bool, error) {
 	}
 
 	cert, err := x509.ParseCertificate(tlsCert.Certificate[0])
-
 	if err != nil {
 		return -1, time.Now(), true, errors.Wrap(err)
 	}
@@ -492,5 +492,4 @@ func Update(needRestart bool) {
 			log.Debugf("SSL Check.")
 		}
 	}
-
 }

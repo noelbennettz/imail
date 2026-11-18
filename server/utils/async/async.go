@@ -2,11 +2,12 @@ package async
 
 import (
 	"errors"
+	"runtime/debug"
+	"sync"
+
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
-	"runtime/debug"
-	"sync"
 )
 
 type Callback func(params any)

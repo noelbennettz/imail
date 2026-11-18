@@ -174,5 +174,4 @@ func fixHistoryData() {
 		}
 	}
 	log.Infof("Sync History Data Finished. Num: %d", len(emails))
-
 }

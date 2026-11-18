@@ -3,6 +3,11 @@ package send
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/textproto"
+	"strings"
+	"sync"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/dto/parsemail"
 	"github.com/noelbennettz/imail/models"
@@ -13,21 +18,11 @@ import (
 	"github.com/noelbennettz/imail/utils/netutil"
 	"github.com/noelbennettz/imail/utils/smtp"
 	log "github.com/sirupsen/logrus"
-	"net"
-	"net/textproto"
-	"strings"
-	"sync"
 )
 
 type mxDomain struct {
 	domain string
 	mxHost string
-}
-
-// mxFailoverEntry records all MX hosts (ordered by priority) of one recipient domain.
-type mxFailoverEntry struct {
-	domain  string
-	mxHosts []string
 }
 
 type temporaryMXFallbackError struct {
@@ -45,7 +40,6 @@ func (e *temporaryMXFallbackError) Unwrap() error {
 
 // Forward forwards an email
 func Forward(ctx *context.Context, e *parsemail.Email, forwardAddress string, user *models.User) error {
-
 	log.WithContext(ctx).Debugf("Start forwarding email")
 
 	b := e.ForwardBuildBytes(ctx, user, forwardAddress)
@@ -74,7 +68,6 @@ func forwardData(ctx *context.Context, fromDomain string, data []byte, forwardAd
 }
 
 func Send(ctx *context.Context, e *parsemail.Email) (error, map[string]error) {
-
 	_, fromDomain := e.From.GetDomainAccount()
 
 	b := e.BuildBytes(ctx, true)
@@ -83,11 +76,9 @@ func Send(ctx *context.Context, e *parsemail.Email) (error, map[string]error) {
 	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
 
 	return doSend(ctx, fromDomain, b, to, e.From.EmailAddress)
-
 }
 
 func doSend(ctx *context.Context, fromDomain string, data []byte, to []*parsemail.User, from string) (error, map[string]error) {
-
 	// Group by domain
 	toByDomain := map[mxDomain][]*parsemail.User{}
 	mxLookupErrors := map[mxDomain]error{}
@@ -290,7 +281,6 @@ func buildAddress(u []*parsemail.User) []string {
 
 	for _, user := range u {
 		ret = append(ret, user.EmailAddress)
-
 	}
 
 	return ret

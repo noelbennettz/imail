@@ -3,6 +3,10 @@ package controllers
 import (
 	"database/sql"
 	"encoding/json"
+	"io"
+	"net/http"
+	"strings"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/response"
@@ -14,9 +18,6 @@ import (
 	"github.com/noelbennettz/imail/utils/errors"
 	"github.com/noelbennettz/imail/utils/password"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"net/http"
-	"strings"
 )
 
 type loginRequest struct {
@@ -25,7 +26,6 @@ type loginRequest struct {
 }
 
 func Login(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
-
 	reqBytes, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.Errorf("%+v", err)

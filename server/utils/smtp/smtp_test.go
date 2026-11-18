@@ -3,14 +3,15 @@ package smtp
 import (
 	"errors"
 	"fmt"
-	"github.com/noelbennettz/imail/config"
-	"github.com/noelbennettz/imail/utils/netutil"
 	"io"
 	"net"
 	"net/textproto"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/noelbennettz/imail/config"
+	"github.com/noelbennettz/imail/utils/netutil"
 )
 
 func TestSendMailUnsafeUsesFinalDataResponseAsDeliveryResult(t *testing.T) {

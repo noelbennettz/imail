@@ -1,9 +1,10 @@
 package match
 
 import (
+	"strings"
+
 	"github.com/noelbennettz/imail/dto/parsemail"
 	"github.com/noelbennettz/imail/utils/context"
-	"strings"
 )
 
 type ContainsMatch struct {

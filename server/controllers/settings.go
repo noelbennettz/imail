@@ -2,6 +2,9 @@ package controllers
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/response"
 	"github.com/noelbennettz/imail/i18n"
@@ -9,8 +12,6 @@ import (
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/password"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"net/http"
 )
 
 type modifyPasswordRequest struct {

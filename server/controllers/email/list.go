@@ -2,6 +2,11 @@ package email
 
 import (
 	"encoding/json"
+	"io"
+	"math"
+	"net/http"
+	"time"
+
 	"github.com/noelbennettz/imail/dto"
 	"github.com/noelbennettz/imail/dto/parsemail"
 	"github.com/noelbennettz/imail/dto/response"
@@ -9,10 +14,6 @@ import (
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
-	"io"
-	"math"
-	"net/http"
-	"time"
 )
 
 type emailListResponse struct {

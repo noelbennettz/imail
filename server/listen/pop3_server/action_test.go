@@ -3,15 +3,16 @@ package pop3_server
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/emersion/go-message/mail"
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/third_party/gopop"
 	"github.com/noelbennettz/imail/utils/context"
-	"io"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 func Test_action_Retr(t *testing.T) {
@@ -59,5 +60,4 @@ func Test_email(t *testing.T) {
 	tw.Close()
 
 	fmt.Printf("%s", b.String())
-
 }

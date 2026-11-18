@@ -2,8 +2,9 @@ package ssl
 
 import (
 	"fmt"
-	"github.com/noelbennettz/imail/config"
 	"testing"
+
+	"github.com/noelbennettz/imail/config"
 )
 
 func TestCheckSSLCrtInfo(t *testing.T) {

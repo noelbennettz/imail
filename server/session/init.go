@@ -1,14 +1,14 @@
 package session
 
 import (
+	"time"
+
 	"github.com/alexedwards/scs/mysqlstore"
 	"github.com/alexedwards/scs/postgresstore"
 	"github.com/alexedwards/scs/sqlite3store"
 	"github.com/alexedwards/scs/v2"
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
-
-	"time"
 )
 
 var Instance *scs.SessionManager
@@ -34,5 +34,4 @@ func Init() {
 	default:
 		panic("Unsupported database type: " + config.Instance.DbType)
 	}
-
 }

@@ -161,9 +161,7 @@ func (s *Server) handleClient(conn net.Conn) {
 		}()
 	}
 
-	var (
-		eol = "\r\n"
-	)
+	eol := "\r\n"
 	reader := bufio.NewReader(conn)
 
 	fmt.Fprintf(conn, "+OK %s POP3 Server powered by gopop"+eol, s.Domain)

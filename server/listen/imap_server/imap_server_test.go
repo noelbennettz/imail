@@ -3,6 +3,13 @@ package imap_server
 import (
 	"bufio"
 	"crypto/tls"
+	"mime"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-message/charset"
@@ -12,17 +19,13 @@ import (
 	"github.com/noelbennettz/imail/utils/array"
 	pcontext "github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/password"
-	"mime"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
 )
 
-var clientUnLogin *imapclient.Client
-var clientLogin *imapclient.Client
-var imapTestAddr string
+var (
+	clientUnLogin *imapclient.Client
+	clientLogin   *imapclient.Client
+	imapTestAddr  string
+)
 
 func TestMain(m *testing.M) {
 	wd, err := os.Getwd()
@@ -126,7 +129,6 @@ func seedIMAPTestData() {
 }
 
 func TestCapability(t *testing.T) {
-
 	res, err := clientUnLogin.Capability().Wait()
 	if err != nil {
 		t.Error(err)
@@ -142,7 +144,6 @@ func TestCapability(t *testing.T) {
 	if _, ok := res["IDLE"]; !ok {
 		t.Error("IDLE Capability Error")
 	}
-
 }
 
 func TestLogin(t *testing.T) {
@@ -176,11 +177,9 @@ func TestCreate(t *testing.T) {
 	if !array.InArray("一级菜单", mailbox) || !array.InArray("一级菜单/二级菜单", mailbox) {
 		t.Error(mailbox)
 	}
-
 }
 
 func TestRename(t *testing.T) {
-
 	err := clientLogin.Rename("一级菜单", "主菜单").Wait()
 	if err != nil {
 		t.Error(err)
@@ -246,11 +245,9 @@ func TestList(t *testing.T) {
 	if len(res) == 0 {
 		t.Error("List Error")
 	}
-
 }
 
 func TestDelete(t *testing.T) {
-
 	clientLogin.Create("一级菜单/二级菜单", nil).Wait()
 
 	err := clientLogin.Delete("二级菜单").Wait()
@@ -269,12 +266,11 @@ func TestDelete(t *testing.T) {
 	if array.InArray("二级菜单", mailbox) {
 		t.Error(mailbox)
 	}
-
 }
 
 func TestAppend(t *testing.T) {
-
 }
+
 func TestSelect(t *testing.T) {
 	res, err := clientUnLogin.Select("INBOX", &imap.SelectOptions{}).Wait()
 	if err == nil {
@@ -301,7 +297,6 @@ func TestSelect(t *testing.T) {
 	if res == nil || res.NumMessages == 0 {
 		t.Error("Select Error")
 	}
-
 }
 
 func TestStatus(t *testing.T) {
@@ -316,7 +311,6 @@ func TestStatus(t *testing.T) {
 		t.Logf("%+v", res)
 		t.Error("Select error")
 	}
-
 }
 
 func TestFetch(t *testing.T) {
@@ -386,6 +380,7 @@ func TestFetch(t *testing.T) {
 		t.Error("Fetch error")
 	}
 }
+
 func TestStore(t *testing.T) {
 	res, err := clientLogin.Store(
 		imap.UIDSetNum(1),
@@ -398,17 +393,15 @@ func TestStore(t *testing.T) {
 		t.Errorf("%+v", err)
 	}
 	t.Logf("%+v", res)
-
 }
+
 func TestClose(t *testing.T) {
-
 }
-func TestExpunge(t *testing.T) {
 
+func TestExpunge(t *testing.T) {
 	clientLogin.Select("INBOX", &imap.SelectOptions{}).Wait()
 
 	res, err := clientLogin.UIDExpunge(imap.UIDSetNum(1, 2)).Collect()
-
 	if err != nil {
 		t.Errorf("%+v", err)
 	}
@@ -418,24 +411,23 @@ func TestExpunge(t *testing.T) {
 	if len(ues) > 0 {
 		t.Errorf("TestExpunge Error")
 	}
-
 }
+
 func TestExamine(t *testing.T) {
-
 }
+
 func TestSubscribe(t *testing.T) {
-
 }
+
 func TestUnSubscribe(t *testing.T) {
-
 }
-func TestLSub(t *testing.T) {
 
+func TestLSub(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
-
 }
+
 func TestSearch(t *testing.T) {
 	clientLogin.Select("INBOX", &imap.SelectOptions{}).Wait()
 
@@ -457,6 +449,7 @@ func TestSearch(t *testing.T) {
 	}
 	t.Logf("%+v", res)
 }
+
 func TestMove(t *testing.T) {
 	clientLogin.Select("INBOX", &imap.SelectOptions{}).Wait()
 
@@ -487,7 +480,6 @@ func TestMove(t *testing.T) {
 		}
 
 	}
-
 }
 
 func TestCopy(t *testing.T) {
@@ -519,7 +511,6 @@ func TestCopy(t *testing.T) {
 	} else {
 		t.Error("No Fetch Result")
 	}
-
 }
 
 func TestNoop(t *testing.T) {
@@ -528,6 +519,7 @@ func TestNoop(t *testing.T) {
 		t.Error(err)
 	}
 }
+
 func TestIDLE(t *testing.T) {
 	conn, err := tls.Dial("tcp", imapTestAddr, &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
@@ -677,8 +669,8 @@ func waitIdleConnectionsDeleted(t *testing.T, userId int) {
 	}
 	t.Fatal("idle connections were not cleaned up")
 }
-func TestUnselect(t *testing.T) {
 
+func TestUnselect(t *testing.T) {
 }
 
 func TestLogout(t *testing.T) {

@@ -1,9 +1,10 @@
 package imap_server
 
 import (
+	"strings"
+
 	"github.com/emersion/go-imap/v2"
 	"github.com/noelbennettz/imail/services/group"
-	"strings"
 )
 
 func (s *serverSession) Rename(mailbox, newName string) error {
@@ -23,7 +24,6 @@ func (s *serverSession) Rename(mailbox, newName string) error {
 	newGroupName := newGroupPath[len(newGroupPath)-1]
 
 	err := group.Rename(s.ctx, oldGroupName, newGroupName)
-
 	if err != nil {
 		return &imap.Error{
 			Type: imap.StatusResponseTypeNo,

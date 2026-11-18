@@ -1,21 +1,21 @@
 package cron_server
 
 import (
+	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/services/setup/ssl"
 	"github.com/noelbennettz/imail/signal"
 	"github.com/noelbennettz/imail/utils/netutil"
 	log "github.com/sirupsen/logrus"
-	"time"
 	// Added: HTTP readiness probe
-	"fmt"
-	"net/http"
 )
 
 var expiredTime time.Time
 
 func Start() {
-
 	// On first start, wait until initialization completes
 	if config.Instance == nil || config.IsInit == false {
 		for {
@@ -38,7 +38,6 @@ func Start() {
 	} else {
 		go sslCheck()
 	}
-
 }
 
 // Check the SSL certificate for updates once a day and restart when it changed

@@ -2,8 +2,9 @@ package match
 
 import (
 	"fmt"
-	"github.com/dlclark/regexp2"
 	"testing"
+
+	"github.com/dlclark/regexp2"
 )
 
 func TestRegexMatch_Match(t *testing.T) {

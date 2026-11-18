@@ -2,6 +2,8 @@ package list
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/consts"
 	"github.com/noelbennettz/imail/db"
@@ -11,7 +13,6 @@ import (
 	"github.com/noelbennettz/imail/utils/array"
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
-	"strings"
 )
 import . "xorm.io/builder"
 
@@ -85,7 +86,6 @@ func genSQL(ctx *context.Context, count bool, tagInfo dto.SearchTag, keyword str
 			sql += " and (ue.status =? or ue.group_id=?) "
 			sqlParams = append(sqlParams, tagInfo.Status, models.Junk)
 		}
-
 	} else if tagInfo.Status == -1 {
 		if tagInfo.Type != 1 {
 			sql += " and ue.status = 0"
@@ -135,7 +135,6 @@ func genSQL(ctx *context.Context, count bool, tagInfo dto.SearchTag, keyword str
 	sql += fmt.Sprintf(" LIMIT %d OFFSET %d ", limit, offset)
 
 	return sql, sqlParams
-
 }
 
 type statRes struct {

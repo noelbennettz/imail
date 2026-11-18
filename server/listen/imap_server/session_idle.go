@@ -1,12 +1,13 @@
 package imap_server
 
 import (
+	"sync"
+
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/noelbennettz/imail/models"
 	"github.com/noelbennettz/imail/services/group"
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/spf13/cast"
-	"sync"
 )
 
 type idleConnection struct {
@@ -19,8 +20,10 @@ type idleConnections struct {
 	writers map[string]idleConnection
 }
 
-var userConnects sync.Map
-var userConnectsMu sync.Mutex
+var (
+	userConnects   sync.Map
+	userConnectsMu sync.Mutex
+)
 
 func (s *serverSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{}) error {
 	userId := s.ctx.UserID

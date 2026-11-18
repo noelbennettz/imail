@@ -1,8 +1,9 @@
 package controllers
 
 import (
-	"github.com/noelbennettz/imail/config"
 	"net/http"
+
+	"github.com/noelbennettz/imail/config"
 )
 
 func Interceptor(w http.ResponseWriter, r *http.Request) {

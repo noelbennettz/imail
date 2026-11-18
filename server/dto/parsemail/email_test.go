@@ -216,7 +216,6 @@ dGhpcyBpcyB0eHQgZmlsZSBjb250ZW50IQ==
 	if strings.Contains(string(email.HTML), "file") {
 		t.Errorf("formatContentError:%s", "email content parsing error, file content leaked into the email!")
 	}
-
 }
 
 func Test_buildUser(t *testing.T) {
@@ -303,5 +302,4 @@ func TestEmail_BuildPart(t *testing.T) {
 	}
 	res := e.BuildPart(nil, []int{1, 2})
 	fmt.Println(string(res))
-
 }

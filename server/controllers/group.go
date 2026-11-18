@@ -28,7 +28,6 @@ func GetUserGroupList(ctx *context.Context, w http.ResponseWriter, req *http.Req
 }
 
 func GetUserGroup(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
-
 	retData := []*group.GroupItem{
 		{
 			Label: i18n.GetText(ctx.Lang, "inbox"),
@@ -74,7 +73,6 @@ func AddGroup(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 	}
 
 	newGroup, err := group.CreateGroup(ctx, reqData.Name, reqData.ParentId)
-
 	if err != nil {
 		response.NewErrorResponse(response.ServerError, "DBError", err.Error()).FPrint(w)
 		return
@@ -98,7 +96,6 @@ func DelGroup(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		log.WithContext(ctx).Errorf("%+v", err)
 	}
 	succ, err := group.DelGroup(ctx, reqData.Id)
-
 	if err != nil {
 		response.NewErrorResponse(response.ServerError, "DBError", err.Error()).FPrint(w)
 		return

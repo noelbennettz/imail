@@ -12,7 +12,6 @@ import (
 )
 
 func (s *serverSession) Store(w *imapserver.FetchWriter, numSet imap.NumSet, flags *imap.StoreFlags, options *imap.StoreOptions) error {
-
 	if flags.Op == imap.StoreFlagsSet {
 		return nil
 	}

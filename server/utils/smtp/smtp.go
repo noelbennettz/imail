@@ -23,9 +23,6 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
-	"github.com/noelbennettz/imail/config"
-	"github.com/noelbennettz/imail/utils/netutil"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"net/smtp"
@@ -33,10 +30,16 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/noelbennettz/imail/config"
+	"github.com/noelbennettz/imail/utils/netutil"
+	log "github.com/sirupsen/logrus"
 )
 
-var NoSupportSTARTTLSError = errors.New("smtp: server doesn't support STARTTLS")
-var EOFError = errors.New("EOF")
+var (
+	NoSupportSTARTTLSError = errors.New("smtp: server doesn't support STARTTLS")
+	EOFError               = errors.New("EOF")
+)
 
 const outboundSMTPQuitWriteTimeout = 250 * time.Millisecond
 
@@ -451,7 +454,6 @@ func SendMailWithTls(domain string, addr string, a smtp.Auth, from string, fromD
 // library.
 // Fixes the TLS verification problem
 func SendMail(domain string, addr string, a smtp.Auth, from string, fromDomain string, to []string, msg []byte) error {
-
 	log.Debugf("SendMail,%s ,%s ,%s ,%s ,%v ", domain, addr, from, fromDomain, to)
 
 	if err := validateLine(from); err != nil {

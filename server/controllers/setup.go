@@ -2,6 +2,11 @@ package controllers
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/dto/response"
 	"github.com/noelbennettz/imail/services/setup"
@@ -9,10 +14,6 @@ import (
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
-	"io"
-	"net/http"
-	"os"
-	"strings"
 )
 
 func AcmeChallenge(w http.ResponseWriter, r *http.Request) {
@@ -203,5 +204,4 @@ func Setup(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-
 }

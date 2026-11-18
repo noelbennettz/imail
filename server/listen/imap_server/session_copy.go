@@ -13,7 +13,6 @@ import (
 )
 
 func (s *serverSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, error) {
-
 	var emailList []*response.EmailResponseData
 
 	switch numSet.(type) {
@@ -66,7 +65,6 @@ func (s *serverSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, e
 }
 
 func copy2defaultbox(ctx *context.Context, mails []*response.EmailResponseData, dest string) (int, []int, error) {
-
 	var destUid []int
 	for _, email := range mails {
 
