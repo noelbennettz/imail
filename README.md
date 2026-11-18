@@ -1,6 +1,7 @@
 # iMail — self-hosted mail for your own domains
 
 [![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white)](server/go.mod)
+[![Website](https://img.shields.io/badge/website-noelbennettz.github.io%2Fimail-4f8dff)](https://noelbennettz.github.io/imail/)
 [![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Container image](https://img.shields.io/badge/ghcr.io-imail-blue?logo=github)](https://github.com/noelbennettz/imail/pkgs/container/imail)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue)](LICENSE)
