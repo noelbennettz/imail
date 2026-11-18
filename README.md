@@ -1,0 +1,619 @@
+# iMail — self-hosted mail for your own domains
+
+[![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white)](server/go.mod)
+[![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![Container image](https://img.shields.io/badge/ghcr.io-imail-blue?logo=github)](https://github.com/noelbennettz/imail/pkgs/container/imail)
+[![License](https://img.shields.io/badge/License-AGPL--3.0-blue)](LICENSE)
+
+**iMail** is a self-hosted mail server for your own domains. It is a single Go
+binary with an embedded Vue 3 web client: no nginx, no PHP, no external asset
+CDN and no separate frontend process. A `docker compose up -d --build` gives you
+SMTP, IMAPS, POP3S, a browser mailbox, an administration console, multiple
+domains and per-mailbox quotas.
+
+iMail is designed for small teams and low-resource servers. It keeps its state
+in a single `config/` volume — configuration, SQLite database, DKIM key, TLS
+certificates and per-domain certificates — so a backup is a directory copy
+rather than a database export ceremony.
+
+![The iMail sign-in screen](docs/ui-login.png)
+
+## Contents
+
+- [Features](#features)
+- [Quick start](#quick-start)
+- [DNS records](#dns-records)
+- [Ports and TLS](#ports-and-tls)
+- [Using the mailbox](#using-the-mailbox)
+- [Administration](#administration)
+- [Certificates](#certificates)
+- [Configuration reference](#configuration-reference)
+- [Docker and operations](#docker-and-operations)
+- [Backups and upgrades](#backups-and-upgrades)
+- [Security notes](#security-notes)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [License](#license)
+
+## Features
+
+- **SMTP** on 25 (STARTTLS), **submission** on 587 (STARTTLS), **SMTPS** on
+  465, **IMAPS** on 993, **POP3** on 110 (STLS required for authentication) and
+  **POP3S** on 995.
+- **Dual-stack listeners**: `listenMode` can be `both`, `ipv4` or `ipv6`.
+- **TLS 1.2 and TLS 1.3 only**, with strict SNI validation by default. A TLS
+  connection with no SNI or an unknown hostname is rejected during the
+  handshake. `serverHostnames` adds extra names when needed.
+- **Multiple domains and mailboxes**, with a primary domain, per-mailbox
+  quotas, per-domain user administration and per-domain TLS.
+- **ACME certificates** with HTTP-01, manual DNS-01 TXT records, or automatic
+  DNS-01 through a Cloudflare API token. Certificates can also be uploaded.
+- **DKIM signing**, SPF checking, DMARC/PTR guidance and a configurable spam
+  filter level.
+- **Material 3 web UI**: light/dark/system themes, responsive mobile layout,
+  search, conversation grouping, message view, reply, reply-all, forward and
+  attachment download.
+- **Conversation view** loads five messages at a time. Scroll to the bottom or
+  press “Load more” to continue. Each message has its own menu for viewing the
+  original source or deleting that single message.
+- **Seven UI languages**: English, Simplified Chinese, Traditional Chinese,
+  Arabic, French, Russian and Spanish. All UI assets, including the Inter
+  font, are served locally from the binary.
+- **SQLite by default**, with MySQL and PostgreSQL schema support for larger
+  deployments.
+- **UTC in storage, local time in the browser**: message timestamps are stored
+  in UTC and returned as RFC 3339; the web client renders them in the device’s
+  timezone.
+
+## Quick start
+
+### Requirements
+
+- Docker with Compose, or a Go toolchain and a way to run the binary.
+- A public IPv4 and/or IPv6 address.
+- A domain whose DNS you control.
+- Inbound TCP ports **25, 80, 110, 443, 465, 587, 993 and 995** reachable from
+  the internet (at least the ports your clients use), plus outbound TCP 25 for
+  delivery to other mail servers.
+- Port 80 available for ACME HTTP-01, unless you use DNS-01 or upload a
+  certificate.
+
+Many VPS and residential providers block port 25. If port 25 is blocked, iMail
+can still receive on alternate ports, but it can send through a relay only if
+you configure that relay yourself; check with your provider before debugging
+the application.
+
+### Start iMail
+
+```bash
+git clone https://github.com/noelbennettz/imail.git
+cd imail
+mkdir -p config
+docker compose up -d --build
+docker compose logs -f imail
+```
+
+### Run the published image
+
+The GitHub Actions workflow builds `linux/amd64` and `linux/arm64` images and
+publishes them to GitHub Container Registry. On a host with Docker:
+
+```bash
+mkdir -p /srv/imail/config
+docker pull ghcr.io/noelbennettz/imail:latest
+docker run -d \
+  --name imail \
+  --restart unless-stopped \
+  -p 25:25 \
+  -p 80:80 \
+  -p 110:110 \
+  -p 443:443 \
+  -p 465:465 \
+  -p 587:587 \
+  -p 993:993 \
+  -p 995:995 \
+  -v /srv/imail/config:/work/config \
+  -e TZ=UTC \
+  ghcr.io/noelbennettz/imail:latest
+```
+
+`/srv/imail/config` is the persistent volume. It must be writable by the
+container and should be backed up: it contains the configuration, database,
+DKIM key and TLS certificates. If the GHCR package is private, authenticate
+first with a GitHub personal access token that has `read:packages`:
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
+```
+
+Then open `http://<server-ip>/` and complete the setup wizard. The same ports
+are used by the Compose example below; on rootless Docker publish high host
+ports instead (`-p 8080:80 -p 18443:443`, and so on).
+
+### Run with Docker Compose from GHCR
+
+The repository also includes `docker-compose.ghcr.yml`, which pulls the
+published image instead of building locally. It uses the same ports and
+`./config` volume:
+
+```bash
+mkdir -p config
+docker compose -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.ghcr.yml up -d
+docker compose -f docker-compose.ghcr.yml logs -f imail
+```
+
+Update this deployment with:
+
+```bash
+docker compose -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+The same private-package note applies: authenticate to `ghcr.io` first if the
+package is not public. The `config/` directory is created by the container on
+first start; keep it persistent and back it up.
+
+After either the `docker run` or Compose deployment is up, open
+`http://<server-ip>/` and complete the setup wizard:
+
+1. **Database** — SQLite is the default and works well for a small server.
+   Choose MySQL or PostgreSQL if you already operate one.
+2. **Administrator** — choose an administrator account and a password of at
+   least 8 characters. Administrator accounts also use the mailbox login rules
+   described below.
+3. **Domains** — set the primary mail domain, the browser-facing web domain
+   (for example `mail.example.com`) and any additional domains.
+4. **DNS** — copy the generated records into your DNS provider. The wizard
+   shows A/AAAA, MX, SPF, DKIM, DMARC and PTR guidance.
+5. **TLS** — choose HTTP-01, DNS-01 (manual or Cloudflare) or an uploaded
+   certificate.
+
+After the wizard finishes, iMail restarts its listeners and the mailbox is
+available at the web domain. The setup wizard is only available before the
+first successful initialization; complete it promptly and do not expose a
+fresh, unconfigured instance to an untrusted network.
+
+### First login
+
+- With **one configured domain**, you may sign in with the bare account name
+  or the full address (`alice` or `alice@example.com`).
+- With **two or more configured domains**, sign in with the full address
+  (`alice@example.com`). A bare name is rejected because the mailbox domain
+  would be ambiguous.
+- The same rule is used by the web UI, SMTP AUTH, IMAP and POP3.
+- Accounts are globally unique. If you need the same local part in two
+  domains, they are separate accounts and should be named distinctly (for
+  example `alice` and `alice-sales`); the current schema does not allow
+  `alice@one.example` and `alice@two.example` to coexist.
+
+## DNS records
+
+Let `example.com` be the primary domain and `mail.example.com` the web domain.
+The setup wizard generates the exact values for your server; the table below is
+the shape of the records. Repeat the mail records for every domain iMail should
+receive mail for.
+
+| Host | Type | Value | Notes |
+|---|---|---|---|
+| `@` | A / AAAA | public server address | Apex for mail delivery |
+| `mail` | A / AAAA | public server address | Web UI; use your `webDomain` |
+| `smtp` | A / AAAA | public server address | SMTP clients and MX target |
+| `imap` | A / AAAA | public server address | IMAP clients |
+| `pop` | A / AAAA | public server address | POP3 clients |
+| `@` | MX | `10 smtp.example.com.` | Inbound mail |
+| `@` | TXT | `v=spf1 a mx ~all` | SPF |
+| `default._domainkey` | TXT | generated DKIM public key | Use the value from the wizard, not this text |
+| `_dmarc` | TXT | `v=DMARC1; p=quarantine; rua=mailto:postmaster@example.com` | DMARC |
+| reverse DNS / PTR | PTR | `smtp.example.com` | Set at the VPS or IP provider; cannot be set in normal domain DNS |
+
+The setup wizard also shows the records for each additional domain. For
+multi-domain setups, each domain needs its own MX, SPF, DKIM and DMARC records
+and the mail hostname must resolve to this server. Keep the DKIM private key
+and the generated `config/` directory private; only the public key belongs in
+DNS.
+
+Propagation can take longer than the wizard. Validate with:
+
+```bash
+dig +short MX example.com
+dig +short TXT default._domainkey.example.com
+dig +short TXT _dmarc.example.com
+dig +short A smtp.example.com
+dig -x <server-ip>
+```
+
+## Ports and TLS
+
+### Listener map
+
+| Port | Protocol | Notes |
+|---:|---|---|
+| 25 | SMTP | Inbound mail and STARTTLS when offered |
+| 80 | HTTP | Web UI in HTTP mode and ACME HTTP-01 challenges |
+| 110 | POP3 | Generic plaintext greeting; **STLS is required before USER/PASS** |
+| 443 | HTTPS | Web UI when `httpsEnabled` is not `2` |
+| 465 | SMTPS | Implicit TLS |
+| 587 | Submission | STARTTLS |
+| 993 | IMAPS | Implicit TLS; IMAP is not exposed without TLS |
+| 995 | POP3S | Implicit TLS |
+
+The Docker image exposes all eight ports. `docker-compose.yml` publishes the
+same numbers on the host. On a rootless Docker host, publish high host ports and
+map them to the container ports (for example `8080:80` and `18443:443`) because
+rootless Docker cannot bind ports below 1024.
+
+### `httpsEnabled`
+
+`httpsEnabled` controls the web listener:
+
+- `0` / `1` — HTTPS is enabled and HTTP redirects to the HTTPS web domain,
+  except for `/api/ping` and `/.well-known/acme-challenge/`.
+- `2` — HTTP-only mode. Use this behind a TLS reverse proxy or for local
+  testing. The session cookie is not marked `Secure` in this mode; terminate
+  TLS at a trusted proxy when using HTTP-only mode in production.
+
+Mail listeners always use the configured certificates. The web domain and all
+mail hostnames must be present in the certificate’s SAN list. If you use a
+reverse proxy for the web UI, either preserve the original hostname and SNI or
+add the public hostname to `serverHostnames`; do not disable SNI validation
+unless you fully understand the exposure.
+
+## Using the mailbox
+
+The mailbox supports:
+
+- Inbox, sent, drafts, junk, trash and custom folders.
+- Search across subject and message text.
+- Conversation mode with subject normalization across `Re:`, `Fwd:`, localized
+  reply/forward prefixes and multiple folders.
+- Reply, reply-all and forward with quoted original content.
+- Attachments: inline images are served with a sandboxed content type; all
+  other attachments are downloaded as `application/octet-stream`.
+- Conversation pagination: five messages per page, then “Load more” or scroll
+  to load the next page.
+- Per-message actions under the date: **View source** and **Delete this
+  message**. Source is the original MIME for messages received or sent over
+  SMTP after this version; older or API-created messages use a reconstructed
+  header/body view.
+- Per-mailbox quota display and settings.
+
+Raw MIME is stored in the database for new SMTP messages so “View source” can
+show the original headers, attachments and custom headers. This increases disk
+usage; include the database in backups and monitor free space.
+
+## Administration
+
+Open `/settings` from the mailbox or the settings icon. The page is split into
+personal settings and administration.
+
+### Personal settings
+
+- **Password** — shows the current mailbox address and changes the password.
+  The account display is on this page so it is visible on both desktop and
+  mobile. Password changes revoke all existing sessions, including the current
+  one; sign in again afterwards.
+- **Folders** — create, rename and delete the user’s mail folders.
+- **Rules** — match on sender, subject, recipients, text, HTML or content and
+  read, move, delete or forward. Forward targets are validated as email
+  addresses; move targets must belong to the same user.
+
+### Administration (administrators only)
+
+- **Users** — create, edit, disable and delete mailboxes. Each user has an
+  account, display name, primary domain, password and quota in MiB. Account
+  names are 1–20 letters, digits, dots, underscores or hyphens; passwords are
+  at least 8 characters.
+- **Domains** — add or remove configured domains. A domain with users cannot be
+  removed, and the primary domain cannot be removed. Removing a domain triggers
+  a listener reload.
+- **DNS** — show the records for a domain and copy individual rows or the whole
+  table.
+- **TLS Certificate** — opened from a row on the Domains page, so each domain
+  can use its own certificate. Choose:
+  - **HTTP-01** — requires inbound port 80 and a public hostname.
+  - **Manual DNS-01** — the dialog shows the TXT records to add; issuance waits
+    while you add them.
+  - **Cloudflare DNS-01** — uses an API token with Zone.DNS edit permission.
+  - **Upload** — paste or select a PEM certificate and private key.
+  Shared certificates are marked as such; domains without their own
+  certificate fall back to the shared one.
+
+The administration console is intentionally small. There is no plugin or hook
+system; all state is in the configuration file and database described below.
+
+## Certificates
+
+A certificate must cover every hostname a client uses. For a domain
+`example.com`, that normally means:
+
+```text
+example.com
+smtp.example.com
+imap.example.com
+pop.example.com
+mail.example.com   (when it is the webDomain)
+```
+
+iMail supports three certificate flows:
+
+1. **Global setup certificate** — selected in the setup wizard. It is used as
+   the shared fallback and for the web listener when a domain has no dedicated
+   certificate.
+2. **Per-domain certificate** — issue or upload one from Domains → TLS. The
+   certificate is stored under `config/ssl/domains/<domain>/` and selected by
+   SNI for that domain and its `smtp.`, `imap.` and `pop.` names.
+3. **Automatic renewal** — HTTP-01 and Cloudflare DNS-01 certificates are
+   checked daily and renewed when fewer than 30 days remain. Manual DNS-01 and
+   uploaded certificates are not renewed automatically; watch their expiry in
+   the UI.
+
+The web UI and the mail listeners use the same certificate selection logic.
+If a certificate does not include a hostname, clients will see a name mismatch
+even if the certificate itself is valid.
+
+## Configuration reference
+
+The setup wizard writes `config/config.json`. Values that are normally managed
+by the UI can also be edited while the container is stopped. Back up the file
+before editing it; it is written atomically with mode `0600`.
+
+```jsonc
+{
+  "logLevel": "info",              // info | debug | warn | error
+  "domain": "example.com",         // primary mail domain
+  "domains": ["example.com", "example.net"],
+  "webDomain": "mail.example.com",
+  "dkimPrivateKeyPath": "config/dkim/dkim.priv",
+  "sslType": "0",                  // "0" HTTP-01, "1" upload, "2" DNS-01
+  "SSLPrivateKeyPath": "config/ssl/private.key",
+  "SSLPublicKeyPath": "config/ssl/public.crt",
+  "dbType": "sqlite",              // sqlite | mysql | postgres
+  "dbDSN": "./config/imail.db",
+  "httpsEnabled": 0,               // 0/1 HTTPS, 2 HTTP-only
+  "httpPort": 80,
+  "httpsPort": 443,
+  "isInit": true,
+  "listenMode": "both",            // both | ipv4 | ipv6
+  "tlsMinVersion": "1.2",
+  "tlsMaxVersion": "1.3",
+  "disableSNICheck": false,
+  "serverHostnames": [],
+  "dnsProvider": "",               // "cloudflare" or empty/manual
+  "dnsApiToken": "",
+  "domainCertificates": {},
+  "defaultQuotaMB": 1024,          // 0 = unlimited
+  "spamFilterLevel": 0             // 0 off; 1 SPF+DKIM fail; 2 SPF fail; 3 DKIM fail
+}
+```
+
+Notes:
+
+- `SSLPrivateKeyPath`, `SSLPublicKeyPath` and `dkimPrivateKeyPath` may be
+  absolute or relative to `IMAIL_ROOT` / the binary directory.
+- `dnsApiToken` is a secret. It is redacted from startup logs, but it remains
+  in `config.json`; protect that file and never commit it.
+- `domainCertificates` stores per-domain mode/provider/token metadata. Use the
+  Domains page rather than editing it by hand.
+- MySQL/PostgreSQL require the matching schema and DSN; the default SQLite
+  database is suitable for a single small server.
+- `isInit` is set by the setup wizard. Do not set it manually before completing
+  setup unless you are restoring an existing configuration.
+
+## Docker and operations
+
+The included Compose file runs one container and mounts `./config`:
+
+`docker-compose.yml` builds the image locally. `docker-compose.ghcr.yml` is the
+same deployment but pulls `ghcr.io/noelbennettz/imail:latest` instead; use the
+latter when you do not want a local Go/Node build.
+
+```yaml
+services:
+  imail:
+    build: .
+    image: imail:internal
+    restart: unless-stopped
+    ports:
+      - "25:25"
+      - "80:80"
+      - "110:110"
+      - "443:443"
+      - "465:465"
+      - "587:587"
+      - "993:993"
+      - "995:995"
+    volumes:
+      - ./config:/work/config
+```
+
+The application stores everything it needs under `/work/config`: the JSON
+configuration, SQLite database, DKIM key and TLS material. Keep that volume on
+persistent storage.
+
+The container health check calls `/api/ping`. Before setup that endpoint
+returns a setup-needed status by design; after setup it returns success when the
+HTTP listener is ready. If the container is healthy but mail is not working,
+check the mail listener logs and the host firewall separately.
+
+`TZ` in Compose does not change stored timestamps: iMail stores UTC internally
+and renders dates in the browser's local time. Set `TZ` only if your logging
+stack expects a specific local zone.
+
+### Updating
+
+```bash
+# local build:
+docker compose build
+docker compose up -d
+docker compose logs -f imail
+```
+
+For the published GHCR Compose file:
+
+```bash
+docker compose -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+The workflow publishes `ghcr.io/noelbennettz/imail`, so the equivalent update
+for a `docker run` deployment is:
+
+```bash
+docker pull ghcr.io/noelbennettz/imail:latest
+docker stop imail && docker rm imail
+# run the docker run command from “Run the published image” again
+```
+
+The `config/` volume is not touched by an image update. Existing MD5 password
+hashes are upgraded to PBKDF2 on the next successful login, so no manual
+password reset is required. If you changed the session cookie name in an older
+build, users may need to sign in again.
+
+## Backups and upgrades
+
+Back up the whole `config/` directory. A consistent SQLite backup is easiest
+when the container is stopped:
+
+```bash
+docker compose stop imail
+tar -C . -czf imail-backup-$(date +%F).tar.gz config
+docker compose start imail
+```
+
+For a live SQLite backup, use SQLite’s `.backup` command or copy while writes
+are stopped; do not copy a database mid-write and expect a reliable restore.
+The backup must include:
+
+- `config/config.json`
+- the SQLite file (`config/imail.db` by default) or your external database
+- `config/dkim/`
+- `config/ssl/` including `config/ssl/domains/<domain>/`
+
+Restore by stopping the container, replacing `config/`, and starting it again.
+The schema is synchronized on startup. Test a restore on a separate host
+before relying on it.
+
+## Security notes
+
+- Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes (210,000
+  iterations). Password changes revoke existing sessions. Minimum length is 8
+  characters.
+- Multi-domain deployments require a full `account@domain` login for web,
+  SMTP, IMAP and POP3. The account namespace is global; duplicate local parts
+  across domains are not allowed by the current schema.
+- TLS listeners require a known SNI by default. Keep `disableSNICheck` off.
+- Plaintext SMTP and POP3 greetings use a generic server name (`imail`) and do
+  not disclose any configured mail domain.
+- Outbound SMTP verifies the remote MX certificate and does not silently fall
+  back to plaintext. A delivery that cannot establish verified TLS is reported
+  as a delivery failure.
+- Session cookies are `HttpOnly` and `SameSite=Lax`; `Secure` is enabled when
+  HTTPS is enabled. Do not run an HTTPS deployment through an untrusted proxy.
+- The setup wizard is available before first initialization. Complete it on a
+  trusted network and do not expose an unconfigured instance to the internet.
+- “View source” stores and displays the original MIME for new SMTP messages.
+  That can include full headers and attachments; protect the database and
+  backups accordingly.
+- Run the container behind a firewall and expose only the ports you need. If
+  you terminate TLS at a reverse proxy, forward the original hostname and
+  `/.well-known/acme-challenge/` correctly.
+
+## Troubleshooting
+
+### I can log in but cannot send or receive mail
+
+Check the provider’s outbound TCP 25 policy first. Many VPS providers block 25
+until you request an unblock. Then verify:
+
+```bash
+dig +short MX example.com
+dig +short A smtp.example.com
+dig +short TXT _dmarc.example.com
+nc -vz <server-ip> 25
+```
+
+Also check that the host firewall and Docker port mapping allow the mail ports,
+and that reverse DNS (PTR) for the public address points at your SMTP hostname.
+SPF, DKIM and DMARC records must match the domain you send from.
+
+### TLS handshake fails or clients report a name mismatch
+
+The requested hostname must be in the certificate SAN list and in the server’s
+known hostname set. Check the certificate from the client side:
+
+```bash
+openssl s_client -connect smtp.example.com:465 -servername smtp.example.com
+openssl s_client -connect imap.example.com:993 -servername imap.example.com
+```
+
+For a domain with its own certificate, issue or upload it on Domains → TLS. If
+you use a reverse proxy, preserve SNI and the public hostname; adding the name
+to `serverHostnames` is safer than disabling SNI checks.
+
+### ACME issuance fails
+
+HTTP-01 requires port 80 to reach iMail (or a proxy that forwards
+`/.well-known/acme-challenge/`). DNS-01 requires either the manually displayed
+TXT records or a Cloudflare token with Zone.DNS edit permission. Wait for DNS
+propagation and check the status message in the TLS dialog. Do not retry in a
+tight loop; ACME providers rate-limit failures.
+
+### Login says the domain must be specified
+
+This is expected with more than one configured domain. Use the full address
+(`alice@example.com`). With one domain, either the bare account or the full
+address works. New passwords shorter than 8 characters are rejected.
+
+### Times look shifted
+
+iMail stores UTC and the browser converts timestamps to the device timezone.
+Check the client’s timezone rather than the server. Existing databases created
+by very old builds may contain timestamps written under a fixed server zone;
+those historical rows may need a one-time correction after upgrading.
+
+### POP3 says TLS is required
+
+Port 110 accepts a generic plaintext greeting but authentication requires
+`STLS` first. Use POP3S on 995, or configure the client to issue `STLS` on 110.
+
+### Docker cannot bind a port
+
+Rootless Docker cannot bind ports below 1024. Publish high host ports and map
+them to the container’s standard ports, for example `-p 8080:80 -p 18443:443`;
+this changes host reachability, not the ports iMail uses inside the container.
+
+## Development
+
+Requirements: Go 1.24 or newer and Node.js/Yarn for the frontend.
+
+```bash
+make build       # frontend + server binaries
+make docker      # build imail:internal
+make test        # Go tests; binding ports below 1024 requires privileges
+cd fe && yarn dev
+```
+
+The Go server is in `server/`; the Vue 3 frontend is in `fe/`. The frontend is
+embedded into the Go binary for production, so the final image needs no Node.js
+runtime. The repository vendors Go dependencies and builds with `-mod=vendor`.
+
+The root integration test starts the real listeners and therefore needs
+privileges for ports 25/80/443; package-level tests can run without those
+privileges. `go vet ./...` should be clean.
+
+## License
+
+iMail is licensed under the GNU Affero General Public License v3.0. See
+[LICENSE](LICENSE). Vendored third-party components retain their own licenses;
+the full list — 48 Go modules with the path of each licence text, plus the
+front-end packages, the Inter webfont (OFL-1.1) and the three source files
+copied into the tree — is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The published image carries both files under `/usr/share/doc/imail/`.
+
+Because iMail is a network service, section 13 applies: the login page and the
+sidebar carry a **source code** link, and every release is built from this
+public repository, so anyone who uses the web interface is offered the
+corresponding source of the version they are talking to. If you run a modified
+iMail, point that link (or an equivalent offer) at your own source.
+

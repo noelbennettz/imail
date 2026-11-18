@@ -1,0 +1,23 @@
+{
+  "logLevel": "info",
+  "domain": "example.com",
+  "domains": ["example.com", "example.net"],
+  "webDomain": "mail.example.com",
+  "dkimPrivateKeyPath": "config/dkim/dkim.priv",
+  "sslType": "1",
+  "SSLPrivateKeyPath": "config/ssl/private.key",
+  "SSLPublicKeyPath": "config/ssl/public.crt",
+  "dbDSN": "./config/imail.db",
+  "dbType": "sqlite",
+  "httpsEnabled": 0,
+  "spamFilterLevel": 0,
+  "httpPort": 80,
+  "httpsPort": 443,
+  "isInit": false,
+  "listenMode": "both",
+  "tlsMinVersion": "1.2",
+  "tlsMaxVersion": "1.3",
+  "disableSNICheck": false,
+  "serverHostnames": [],
+  "defaultQuotaMB": 1024
+}

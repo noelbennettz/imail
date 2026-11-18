@@ -1,0 +1,17 @@
+.idea
+.DS_Store
+dist
+output
+imail.db
+*.db
+server/plugins
+server/imail_dev
+/config
+/server/config/config.json
+/server/config/config.dev.json
+/server/config/config_mysql.json
+/server/config/imail_temp.db
+/server/config/dkim
+/server/config/ssl
+*_KEY
+AURORA_SECRET

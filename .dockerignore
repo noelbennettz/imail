@@ -1,0 +1,16 @@
+.git
+.gitignore
+/config
+server/config/config.json
+server/config/imail_temp.db
+server/config/dkim
+server/config/ssl
+output
+server/plugins
+server/listen/http_server/dist
+server/imail_dev
+fe/node_modules
+docs/*.gif
+*.db
+*.log
+tmp

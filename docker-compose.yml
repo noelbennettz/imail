@@ -1,0 +1,30 @@
+services:
+  imail:
+    build:
+      context: .
+      args:
+        VERSION: internal
+    image: imail:internal
+    container_name: imail
+    restart: unless-stopped
+    # Dual-stack publishing; the daemon must have IPv6 enabled for AAAA records
+    # to be reachable. Use ipv4/ipv6 listenMode in config.json when required.
+    ports:
+      - "25:25"     # SMTP
+      - "80:80"     # HTTP / ACME
+      - "110:110"   # POP3
+      - "443:443"   # HTTPS
+      - "465:465"   # SMTPS
+      - "587:587"   # Submission / STARTTLS
+      - "993:993"   # IMAPS
+      - "995:995"   # POP3S
+    volumes:
+      - ./config:/work/config
+    environment:
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/api/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
