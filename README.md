@@ -58,7 +58,7 @@ docker compose -f docker-compose.ghcr.yml logs -f imail
 | --- | --- |
 | [DOCS.md](DOCS.md) | Features, installation detail, DNS records, ports and TLS, mailbox and administration, certificates, configuration reference, operations, backups, security notes, troubleshooting, development. |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Licence of every vendored Go module, front-end package and copied source file. |
-| [docs/](docs/) | Project website, published at <https://noelbennettz.github.io/imail/>. |
+| [`docs/`](docs/) | Project site in English and Traditional Chinese, published at <https://noelbennettz.github.io/imail/> |
 | [docker-compose.example.yml](docker-compose.example.yml) | Every compose port, volume and variable, commented in place. |
 
 ## Licence
