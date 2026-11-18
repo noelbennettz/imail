@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>iMail — self-hosted mail for your own domains</title>
-<meta name="description" content="iMail is a self-hosted mail server for your own domains: SMTP, IMAPS, POP3S, a browser mailbox and an admin console in one Go binary with an embedded Vue 3 UI.">
+<meta name="description" content="iMail is a self-hosted mail server for your own domains: SMTP, IMAPS, POP3S, a browser mailbox and an admin console in one container.">
 <meta name="theme-color" content="#f4efe4">
 <meta name="color-scheme" content="light dark">
 <link rel="canonical" href="https://noelbennettz.github.io/imail/">
@@ -42,7 +42,7 @@
 <link rel="stylesheet" href="style.css">
 <meta property="og:type" content="website">
 <meta property="og:title" content="iMail — mail on your own domain">
-<meta property="og:description" content="SMTP, IMAPS, POP3S, webmail and an admin console in one container. Multiple domains, ACME certificates, DKIM, IPv4 + IPv6.">
+<meta property="og:description" content="SMTP, IMAPS, POP3S, webmail and an admin console in one container. Multiple domains, ACME certificates, DKIM.">
 <meta property="og:url" content="https://noelbennettz.github.io/imail/">
 <meta property="og:image" content="https://noelbennettz.github.io/imail/assets/login.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -90,9 +90,10 @@
       <span class="eyebrow"><span class="dot"></span>Self-hosted · Docker · AGPL-3.0</span>
       <h1>Mail, on<br><span class="grad">your own domain.</span></h1>
       <p class="lede">
-        A mail server for small teams: SMTP, IMAPS and POP3S, a Material 3 web
-        mailbox and an admin console in one Go binary with an embedded Vue 3 UI.
-        No nginx, PHP or CDN. State is a single <code>config/</code> directory.
+        A mail server for your own domains: SMTP, submission, IMAPS and POP3S, a
+        browser mailbox and an admin console in one container. All of its state
+        — configuration, database, DKIM key and certificates — is one
+        <code>config/</code> directory you can copy.
       </p>
       <div class="actions">
         <a class="btn btn-primary" href="#deploy">
@@ -126,49 +127,39 @@
 <section id="features">
   <div class="container">
     <div class="section-head">
-      <h2>A mail server, not a stack of services.</h2>
-      <p>One process serves the protocols, the mailbox and the admin console.</p>
+      <h2>What it does</h2>
+      <p>Protocols, mailbox, administration and certificates, all in the same container.</p>
     </div>
     <div class="grid">
       <article class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#i-mail"/></svg></div>
-        <h3>One binary, embedded UI</h3>
-        <p>The Go server embeds the Vue 3 web client and the Inter font. No nginx, PHP, Node or external asset CDN in production; the image needs one process.</p>
-      </article>
-      <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-server"/></svg></div>
-        <h3>The whole mail stack</h3>
-        <p>SMTP on 25 with STARTTLS, submission on 587, SMTPS on 465, IMAPS on 993, POP3 on 110 with required STLS, and POP3S on 995.</p>
+        <h3>Mail protocols on standard ports</h3>
+        <p>SMTP on 25 with STARTTLS, submission on 587, SMTPS on 465, IMAPS on 993, POP3 on 110 with STLS required before login, POP3S on 995. The web interface uses 80 and 443.</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-users"/></svg></div>
-        <h3>A real web mailbox</h3>
-        <p>Material 3, light/dark/system themes, search, conversation grouping, reply, reply-all, forward and attachments. Seven UI languages, selected from the browser.</p>
+        <h3>A browser mailbox</h3>
+        <p>Folders, search, conversation view, reply, reply-all, forward, attachment download and light/dark themes. Seven interface languages, chosen from the browser.</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-db"/></svg></div>
         <h3>Domains, users and quotas</h3>
-        <p>A primary domain plus additional domains, per-domain users, per-mailbox quotas, and an admin console for domains, users, DNS and certificates.</p>
+        <p>A primary domain plus additional domains, per-mailbox quotas, and an admin console for users, domains, DNS records and certificates.</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-key"/></svg></div>
-        <h3>Certificates handled</h3>
-        <p>ACME with HTTP-01, manual DNS-01 or automatic Cloudflare DNS-01; uploaded certificates too. Each domain can carry its own cert, and renewals run daily.</p>
+        <h3>Certificates</h3>
+        <p>ACME with HTTP-01, manual DNS-01 or a Cloudflare token, or an uploaded certificate. Each domain can have its own; the ACME flows renew automatically.</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
-        <h3>Deliverability built in</h3>
-        <p>DKIM signing, SPF checks, DMARC and PTR guidance in the setup wizard, and a configurable spam-filter level. Outbound delivery verifies the remote MX certificate.</p>
+        <h3>Deliverability</h3>
+        <p>DKIM signing, SPF checks, DMARC and PTR guidance, and a configurable spam filter. Outbound delivery verifies the remote server's certificate.</p>
       </article>
       <article class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#i-globe"/></svg></div>
-        <h3>IPv4 and IPv6, independently</h3>
-        <p><code>listenMode</code> and <code>egressMode</code> choose the family for listeners and outbound delivery. A configured family the host lacks falls back to the other one at startup.</p>
-      </article>
-      <article class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#i-db"/></svg></div>
-        <h3>A backup is a directory</h3>
-        <p>SQLite by default, with MySQL and PostgreSQL for larger deployments. Configuration, database, DKIM key and certificates all live under <code>config/</code>.</p>
+        <div class="icon"><svg aria-hidden="true"><use href="#i-mail"/></svg></div>
+        <h3>One data directory</h3>
+        <p>SQLite by default, MySQL and PostgreSQL for larger installs. Configuration, database, DKIM key and certificates live under <code>config/</code>, so a backup is a directory copy.</p>
       </article>
     </div>
   </div>
@@ -219,16 +210,16 @@ docker compose -f docker-compose.ghcr.yml logs -f imail</code></pre>
 <section id="dns">
   <div class="container">
     <div class="section-head">
-      <h2>DNS and TLS, generated for you</h2>
-      <p>The setup wizard writes the exact records for every domain. This is the shape of them.</p>
+      <h2>DNS records and TLS</h2>
+      <p>The setup wizard writes the exact values for every domain; this is their shape.</p>
     </div>
     <div class="split">
       <div>
         <ul class="checks">
-          <li><strong>A and AAAA for the mail host.</strong> Add both families if the server has both; add MX, SPF, DKIM and DMARC for every domain that receives mail.</li>
+          <li><strong>A and AAAA for the mail host.</strong> Add the families the server actually has, and MX, SPF, DKIM and DMARC for every domain that receives mail.</li>
           <li><strong>PTR is set at the VPS, not in your zone.</strong> Point reverse DNS at <code>smtp.example.com</code> so receivers can confirm the sending host.</li>
           <li><strong>TLS covers every hostname clients use.</strong> Usually the apex plus <code>smtp.</code>, <code>imap.</code>, <code>pop.</code> and the web domain.</li>
-          <li><strong>Three certificate flows.</strong> HTTP-01, DNS-01 (manual or Cloudflare token) and upload. Per-domain certificates are selected by SNI; HTTP-01 and Cloudflare renew automatically.</li>
+          <li><strong>Certificate options.</strong> HTTP-01, DNS-01 (manual or a Cloudflare token), or an upload. HTTP-01 and Cloudflare renew automatically.</li>
         </ul>
       </div>
       <div>
@@ -252,30 +243,26 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
 </section>
 
 
-<section id="ipv6" class="alt">
+<section id="limits" class="alt">
   <div class="container">
     <div class="section-head">
-      <h2>IPv4 and IPv6 are separate decisions</h2>
-      <p>One setting for listeners, one for outbound delivery, and a sane fallback when the host only has one family.</p>
+      <h2>Limits worth knowing</h2>
+      <p>What decides whether iMail fits, before you move an MX record.</p>
     </div>
     <div class="split">
       <div>
         <ul class="checks">
-          <li><strong><code>listenMode</code>: <code>both</code>, <code>ipv4</code> or <code>ipv6</code>.</strong> <code>both</code> uses Go's dual-stack wildcard, so one socket serves both families.</li>
-          <li><strong><code>egressMode</code> chooses the outbound family.</strong> In <code>both</code> mode delivery uses Happy Eyeballs: an AAAA-only destination goes over IPv6, an A-only one over IPv4.</li>
-          <li><strong>A missing family is detected at startup.</strong> If the configured family does not exist on the host, iMail logs a warning and uses the other one instead.</li>
-          <li><strong>Health checks follow the same result.</strong> They probe both loopbacks, so an IPv6-only container is not reported unhealthy for ignoring 127.0.0.1.</li>
+          <li><strong>Port 25 decides deliverability.</strong> Inbound for mail, outbound for sending. Many hosting providers block it; receiving on more ports does not fix sending.</li>
+          <li><strong>Account names are unique across domains.</strong> <code>alice@one.example</code> and <code>alice@two.example</code> cannot coexist; create <code>alice</code> and <code>alice-sales</code> instead.</li>
+          <li><strong>TLS needs the hostname clients use.</strong> SNI is checked strictly, so every name a client connects to must be in the certificate. Behind a reverse proxy, preserve SNI and the public hostname.</li>
+          <li><strong>Not every certificate renews itself.</strong> HTTP-01 and Cloudflare DNS-01 do; manual DNS-01 records and uploaded certificates you replace by hand.</li>
         </ul>
       </div>
       <div>
-        <div class="copy-wrap">
-          <button class="copy" type="button" data-copy>Copy</button>
-          <pre><code>"listenMode": "both",
-"egressMode": "both"</code></pre>
-        </div>
         <p class="note">
-          <strong>No wildcard guessing.</strong> The wizard's A/AAAA guidance and the public-address probe are
-          family-specific, so an IPv6 address is never printed as if it were IPv4 (or the other way round).
+          <strong>One server, one database.</strong> SQLite suits a single small server; MySQL or PostgreSQL
+          are for deployments that need an external database. IPv4-only and IPv6-only hosts both work, and
+          delivery to an address family the host does not have fails as an ordinary temporary error.
         </p>
       </div>
     </div>
@@ -285,24 +272,24 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
 <section id="security">
   <div class="container">
     <div class="section-head">
-      <h2>Mail-server defaults that do not cut corners</h2>
-      <p>Passwords, TLS and the setup window are the three things that matter most.</p>
+      <h2>Security defaults</h2>
+      <p>What the server does with passwords, TLS and the first run.</p>
     </div>
     <div class="grid">
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-lock"/></svg></div>
         <h3>Passwords and sessions</h3>
-        <p>PBKDF2-HMAC-SHA256 with 210,000 iterations, a minimum of eight characters, and every existing session revoked when a password changes. Old MD5 hashes are upgraded on the next successful login.</p>
+        <p>Passwords are stored as salted PBKDF2 hashes and must be at least eight characters. Changing one signs out every existing session.</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
-        <h3>TLS is not optional</h3>
-        <p>TLS 1.2 and 1.3 only, strict SNI by default, IMAP never exposed without TLS, and outbound delivery fails instead of silently falling back to plaintext when the MX certificate cannot be verified.</p>
+        <h3>TLS everywhere</h3>
+        <p>TLS 1.2 and 1.3 only, IMAP is never served without TLS, and outbound delivery fails rather than falling back to plaintext when the remote certificate cannot be verified.</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-key"/></svg></div>
-        <h3>Secrets stay in one place</h3>
-        <p><code>config/config.json</code> is written with mode <code>0600</code>; the DKIM private key and TLS keys live under <code>config/</code>. Back it up, never commit it, and finish the setup wizard before exposing the host.</p>
+        <h3>First run and secrets</h3>
+        <p><code>config/config.json</code> is written with mode <code>0600</code>. The setup wizard exists only before the first successful initialisation: finish it on a trusted network, and back up <code>config/</code> without ever committing it.</p>
       </article>
     </div>
   </div>
@@ -319,8 +306,6 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
       <div class="wide"><dt>Image</dt><dd class="mono">ghcr.io/noelbennettz/imail</dd></div>
       <div><dt>Tags</dt><dd class="mono">latest, main, sha-&lt;commit&gt;</dd></div>
       <div><dt>Platforms</dt><dd>linux/amd64, linux/arm64</dd></div>
-      <div><dt>Backend</dt><dd>Go, one static binary</dd></div>
-      <div><dt>Front end</dt><dd>Vue 3, embedded in the binary</dd></div>
       <div><dt>Ports</dt><dd>25, 80, 110, 443, 465, 587, 993, 995</dd></div>
       <div><dt>State</dt><dd><code>config/</code> volume: config, SQLite, DKIM key, certificates</dd></div>
       <div><dt>Database</dt><dd>SQLite default; MySQL and PostgreSQL supported</dd></div>
@@ -340,11 +325,11 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
     <div class="faq">
       <details>
         <summary>Is this a mail server or just a webmail client?</summary>
-        <p>Both. iMail speaks SMTP, submission, SMTPS, IMAPS, POP3/STLS and POP3S itself, and also serves a browser mailbox and an admin console. Any standard mail client can connect; the web UI is not required for day-to-day mail.</p>
+        <p>Both. iMail handles SMTP, submission, SMTPS, IMAPS, POP3/STLS and POP3S, and also serves a browser mailbox and an admin console. Any standard mail client can connect; the web interface is not required for day-to-day mail.</p>
       </details>
       <details>
         <summary>My VPS blocks port 25. Can I still use it?</summary>
-        <p>You can receive on alternate ports if your provider supports that, but sending directly to other mail servers needs outbound TCP 25. Ask the provider to unblock it or configure a relay yourself; iMail does not hide a blocked port behind a generic timeout.</p>
+        <p>You can receive on alternate ports if your provider supports that, but sending directly to other mail servers needs outbound TCP 25. Ask the provider to unblock it, or send through a relay you configure yourself.</p>
       </details>
       <details>
         <summary>How does login work with multiple domains?</summary>
@@ -364,7 +349,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
       </details>
       <details>
         <summary>Does it work on an IPv6-only or IPv4-only host?</summary>
-        <p>Yes. <code>listenMode</code> and <code>egressMode</code> are independent, and a configured family that is missing at startup falls back to the other one with a warning. Delivery to a dual-stack destination uses Happy Eyeballs.</p>
+        <p>Yes. IPv4-only, IPv6-only and dual-stack hosts all work; if the configured address family is missing at startup, the other one is used and the reason is logged. A destination that exists only on the missing family cannot be reached, so delivery to it is reported as a temporary failure.</p>
       </details>
       <details>
         <summary>Why AGPL?</summary>
@@ -379,8 +364,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
 <footer class="site-footer">
   <div class="container">
     <div class="fine">
-      <strong>iMail</strong> is a self-hosted mail server for your own domains.
-      One Go binary, an embedded Vue 3 client, and no external services at runtime.
+      <strong>iMail</strong> is a self-hosted mail server for your own domains, licensed AGPL-3.0.
     </div>
     <nav aria-label="Footer">
       <a href="https://github.com/noelbennettz/imail">Source</a>

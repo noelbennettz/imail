@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>iMail — 用自己的網域自架郵件伺服器</title>
-<meta name="description" content="iMail 是自架的郵件伺服器：SMTP、IMAPS、POP3S、瀏覽器信箱與管理台都在單一 Go binary 裡，前端 Vue 3 直接內嵌。多網域、ACME 憑證、DKIM、IPv4 與 IPv6。">
+<meta name="description" content="iMail 是給自己網域用的自架郵件伺服器：SMTP、IMAPS、POP3S、瀏覽器信箱與管理台都在同一個容器裡。">
 <meta name="theme-color" content="#f4efe4">
 <meta name="color-scheme" content="light dark">
 <link rel="canonical" href="https://noelbennettz.github.io/imail/zh.html">
@@ -42,7 +42,7 @@
 <link rel="stylesheet" href="style.css">
 <meta property="og:type" content="website">
 <meta property="og:title" content="iMail — 用自己的網域收發信">
-<meta property="og:description" content="SMTP、IMAPS、POP3S、網頁信箱與管理台，一個容器搞定。多網域、ACME 憑證、DKIM、IPv4 + IPv6。">
+<meta property="og:description" content="SMTP、IMAPS、POP3S、網頁信箱與管理台，一個容器搞定。多網域、ACME 憑證、DKIM。">
 <meta property="og:url" content="https://noelbennettz.github.io/imail/zh.html">
 <meta property="og:image" content="https://noelbennettz.github.io/imail/assets/login.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -90,9 +90,9 @@
       <span class="eyebrow"><span class="dot"></span>自架 · Docker · AGPL-3.0</span>
       <h1>用自己的網域，<br><span class="grad">收發自己的信。</span></h1>
       <p class="lede">
-        給小團隊的郵件伺服器：SMTP、IMAPS、POP3S、Material 3 網頁信箱與管理台，
-        全在一個 Go binary 裡，前端 Vue 3 直接內嵌。production 不需要 nginx、PHP 或 CDN，
-        狀態就是一個 <code>config/</code> 目錄。
+        給自己網域用的郵件伺服器：SMTP、submission、IMAPS 與 POP3S、網頁信箱與管理台，
+        都在同一個容器裡。所有狀態——設定、資料庫、DKIM 金鑰與憑證——就是一個
+        <code>config/</code> 目錄，可以直接複製。
       </p>
       <div class="actions">
         <a class="btn btn-primary" href="#deploy">
@@ -126,49 +126,39 @@
 <section id="features">
   <div class="container">
     <div class="section-head">
-      <h2>是一台郵件伺服器，不是一堆服務的堆疊。</h2>
-      <p>同一個行程提供協定、信箱與管理台。</p>
+      <h2>它能做什麼</h2>
+      <p>協定、信箱、管理與憑證都在同一個容器裡。</p>
     </div>
     <div class="grid">
       <article class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#i-mail"/></svg></div>
-        <h3>單一 binary，前端內嵌</h3>
-        <p>Go 伺服器把 Vue 3 前端與 Inter 字型一起包進去。production 不需要 nginx、PHP、Node 或外部 CDN，image 只跑一個行程。</p>
-      </article>
-      <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-server"/></svg></div>
-        <h3>完整郵件協定</h3>
-        <p>25 的 SMTP（STARTTLS）、587 submission、465 SMTPS、993 IMAPS、110 POP3（認證前必須 STLS）與 995 POP3S，全部自己處理。</p>
+        <h3>標準連接埠上的郵件協定</h3>
+        <p>25 的 SMTP（STARTTLS）、587 submission、465 SMTPS、993 IMAPS、110 POP3（登入前必須 STLS）與 995 POP3S；網頁介面用 80 與 443。</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-users"/></svg></div>
-        <h3>真的能用的網頁信箱</h3>
-        <p>Material 3、淺色／深色／跟隨系統、搜尋、對話群組、回覆、全部回覆、轉寄與附件下載。七種介面語言依瀏覽器自動選擇。</p>
+        <h3>網頁信箱</h3>
+        <p>資料夾、搜尋、對話檢視、回覆、全部回覆、轉寄、附件下載，以及淺色／深色主題。七種介面語言，可在瀏覽器裡切換。</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-db"/></svg></div>
         <h3>多網域、使用者與配額</h3>
-        <p>主要網域加多個附屬網域、各網域自己的使用者、每個信箱的配額，以及管理網域、使用者、DNS 與憑證的管理台。</p>
+        <p>一個主要網域加上多個附屬網域、每個信箱的配額，以及管理使用者、網域、DNS 紀錄與憑證的管理台。</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-key"/></svg></div>
-        <h3>憑證不用自己盯</h3>
-        <p>支援 HTTP-01、手動 DNS-01、Cloudflare DNS-01 與上傳憑證；每個網域可以有自己的憑證，ACME 憑證每天檢查、剩 30 天內自動續。</p>
+        <h3>憑證</h3>
+        <p>HTTP-01、手動 DNS-01 或 Cloudflare token 的 ACME，也可以上傳憑證。每個網域可以有自己的憑證，ACME 的兩種流程會自動續期。</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
-        <h3>送信信譽內建</h3>
-        <p>DKIM 簽章、SPF 檢查、安裝精靈提供 DMARC 與 PTR 指引，外加可調的垃圾郵件等級。外送時會驗證對方 MX 的憑證，不偷偷退回明文。</p>
+        <h3>送信信譽</h3>
+        <p>DKIM 簽章、SPF 檢查、DMARC 與 PTR 指引，外加可調的垃圾郵件過濾等級。外送時會驗證對方伺服器的憑證。</p>
       </article>
       <article class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#i-globe"/></svg></div>
-        <h3>IPv4 與 IPv6 分開決定</h3>
-        <p><code>listenMode</code> 管監聽、<code>egressMode</code> 管外送；啟動時發現設定的位址族不存在，會記警告並降級到另一族。</p>
-      </article>
-      <article class="card">
-        <div class="icon"><svg aria-hidden="true"><use href="#i-db"/></svg></div>
-        <h3>備份就是複製目錄</h3>
-        <p>預設 SQLite，較大的部署可用 MySQL 或 PostgreSQL。設定、資料庫、DKIM 私鑰與憑證全在 <code>config/</code> 底下。</p>
+        <div class="icon"><svg aria-hidden="true"><use href="#i-mail"/></svg></div>
+        <h3>一個資料目錄</h3>
+        <p>預設 SQLite，較大的安裝可用 MySQL 或 PostgreSQL。設定、資料庫、DKIM 金鑰與憑證都在 <code>config/</code> 底下，備份就是複製目錄。</p>
       </article>
     </div>
   </div>
@@ -217,16 +207,16 @@ docker compose -f docker-compose.ghcr.yml logs -f imail</code></pre>
 <section id="dns">
   <div class="container">
     <div class="section-head">
-      <h2>DNS 與 TLS，精靈幫你產生</h2>
-      <p>安裝精靈會給每個網域精確的紀錄值；下面是這些紀錄的形狀。</p>
+      <h2>DNS 紀錄與 TLS</h2>
+      <p>安裝精靈會給每個網域精確的值；下面是這些紀錄的形狀。</p>
     </div>
     <div class="split">
       <div>
         <ul class="checks">
-          <li><strong>郵件主機要有 A 與 AAAA。</strong>伺服器兩族都有就兩筆都加；會收信的每個網域都要有自己的 MX、SPF、DKIM 與 DMARC。</li>
+          <li><strong>郵件主機要有 A 與 AAAA。</strong>只加伺服器實際擁有的族別；會收信的每個網域都要有自己的 MX、SPF、DKIM 與 DMARC。</li>
           <li><strong>PTR 在 VPS 設定，不在你的 zone。</strong>把反解指到 <code>smtp.example.com</code>，收件方才能確認寄件主機。</li>
           <li><strong>憑證要涵蓋用戶端會用的每個名字。</strong>通常是 apex 加上 <code>smtp.</code>、<code>imap.</code>、<code>pop.</code> 與網站網域。</li>
-          <li><strong>三種憑證流程。</strong>HTTP-01、DNS-01（手動或 Cloudflare token）與上傳；每個網域的憑證依 SNI 選擇，HTTP-01 與 Cloudflare 會自動續期。</li>
+          <li><strong>憑證的取得方式。</strong>HTTP-01、DNS-01（手動或 Cloudflare token）或上傳。HTTP-01 與 Cloudflare 會自動續期。</li>
         </ul>
       </div>
       <div>
@@ -249,29 +239,25 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
   </div>
 </section>
 
-<section id="ipv6" class="alt">
+<section id="limits" class="alt">
   <div class="container">
     <div class="section-head">
-      <h2>IPv4 與 IPv6 是兩個獨立決定</h2>
-      <p>一個設定管監聽，一個管外送，主機只有單族時會自動降級。</p>
+      <h2>先知道的限制</h2>
+      <p>在改 MX 之前，決定這台伺服器適不適合你的事。</p>
     </div>
     <div class="split">
       <div>
         <ul class="checks">
-          <li><strong><code>listenMode</code>：<code>both</code>、<code>ipv4</code> 或 <code>ipv6</code>。</strong><code>both</code> 用 Go 的雙棧 wildcard，同一個 socket 服務兩族。</li>
-          <li><strong><code>egressMode</code> 決定外送族別。</strong><code>both</code> 使用 Happy Eyeballs：只有 AAAA 的目的地走 IPv6，只有 A 的走 IPv4。</li>
-          <li><strong>啟動時偵測缺少的族別。</strong>設定的族在這台主機不存在，會記警告並改用另一族。</li>
-          <li><strong>健康檢查跟著同一結果。</strong>先試 127.0.0.1 再試 [::1]，IPv6-only 容器不會因為不聽 IPv4 被判定 unhealthy。</li>
+          <li><strong>25 port 決定能不能送信。</strong>收信靠 inbound、寄信靠 outbound。很多主機商直接封鎖；多開幾個收信 port 並不能解決寄信。</li>
+          <li><strong>帳號名稱在網域之間是唯一的。</strong><code>alice@one.example</code> 與 <code>alice@two.example</code> 不能並存，請改成 <code>alice</code> 與 <code>alice-sales</code>。</li>
+          <li><strong>TLS 要用用戶端連線的名字。</strong>SNI 檢查嚴格，用戶端連的每個名字都必須在憑證裡。放在反向代理後面時，要保留 SNI 與公開主機名。</li>
+          <li><strong>不是所有憑證都會自動續期。</strong>HTTP-01 與 Cloudflare DNS-01 會；手動 DNS-01 與上傳的憑證要自己換。</li>
         </ul>
       </div>
       <div>
-        <div class="copy-wrap">
-          <button class="copy" type="button" data-copy>複製</button>
-          <pre><code>"listenMode": "both",
-"egressMode": "both"</code></pre>
-        </div>
         <p class="note">
-          <strong>不靠猜測。</strong>安裝精靈的 A/AAAA 指引與公開位址偵測都分族別，IPv6 位址不會被當成 IPv4 印出來（反之亦然）。
+          <strong>一台伺服器，一個資料庫。</strong>SQLite 適合單機小規模；需要外部資料庫的部署才選 MySQL 或 PostgreSQL。
+          只有 IPv4 或只有 IPv6 的主機都能跑；送到主機沒有的位址族時，會當成一般的暫時性錯誤。
         </p>
       </div>
     </div>
@@ -282,24 +268,24 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
 <section id="security">
   <div class="container">
     <div class="section-head">
-      <h2>不偷懶的郵件伺服器預設</h2>
-      <p>密碼、TLS 與安裝精靈的曝光窗口，是最重要的三件事。</p>
+      <h2>安全預設</h2>
+      <p>密碼、TLS 與第一次啟動時，伺服器實際的作法。</p>
     </div>
     <div class="grid">
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-lock"/></svg></div>
         <h3>密碼與 session</h3>
-        <p>PBKDF2-HMAC-SHA256、210,000 次迭代，密碼至少 8 字元；改密碼會撤銷所有現有 session。舊的 MD5 密碼會在下一次成功登入時升級。</p>
+        <p>密碼以加鹽的 PBKDF2 雜湊儲存，至少 8 字元；改密碼會撤銷所有現有 session。</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
-        <h3>TLS 不是選項</h3>
-        <p>只支援 TLS 1.2／1.3，預設嚴格 SNI，IMAP 不會在沒有 TLS 的情況下暴露；外送時對方 MX 憑證驗不過就回報失敗，不會偷偷退回明文。</p>
+        <h3>全程 TLS</h3>
+        <p>只支援 TLS 1.2 與 1.3；IMAP 不會在沒有 TLS 的情況下提供；外送時對方憑證驗不過就回報失敗，不會退回明文。</p>
       </article>
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-key"/></svg></div>
-        <h3>機密集中在一個地方</h3>
-        <p><code>config/config.json</code> 以 <code>0600</code> 寫入，DKIM 私鑰與 TLS 金鑰都在 <code>config/</code>。備份它、不要 commit、並且在對外之前完成安裝精靈。</p>
+        <h3>第一次啟動與機密</h3>
+        <p><code>config/config.json</code> 以 <code>0600</code> 寫入。安裝精靈只在第一次成功初始化之前存在：請在可信網路完成，備份 <code>config/</code>，但不要 commit。</p>
       </article>
     </div>
   </div>
@@ -315,8 +301,6 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
       <div class="wide"><dt>Image</dt><dd class="mono">ghcr.io/noelbennettz/imail</dd></div>
       <div><dt>Tags</dt><dd class="mono">latest、main、sha-&lt;commit&gt;</dd></div>
       <div><dt>平台</dt><dd>linux/amd64、linux/arm64</dd></div>
-      <div><dt>後端</dt><dd>Go，單一靜態 binary</dd></div>
-      <div><dt>前端</dt><dd>Vue 3，內嵌在 binary</dd></div>
       <div><dt>連接埠</dt><dd>25、80、110、443、465、587、993、995</dd></div>
       <div><dt>狀態</dt><dd><code>config/</code> volume：設定、SQLite、DKIM 金鑰、憑證</dd></div>
       <div><dt>資料庫</dt><dd>預設 SQLite；支援 MySQL 與 PostgreSQL</dd></div>
@@ -336,11 +320,11 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
     <div class="faq">
       <details>
         <summary>這是郵件伺服器，還是只有網頁信箱？</summary>
-        <p>兩者都是。iMail 自己處理 SMTP、submission、SMTPS、IMAPS、POP3/STLS 與 POP3S，同時提供網頁信箱與管理台。任何標準郵件軟體都能連，網頁介面不是收發信的必需品。</p>
+        <p>兩者都是。iMail 處理 SMTP、submission、SMTPS、IMAPS、POP3/STLS 與 POP3S，同時提供網頁信箱與管理台。任何標準郵件軟體都能連，日常收發信不需要網頁介面。</p>
       </details>
       <details>
         <summary>VPS 擋 25 port，還能用嗎？</summary>
-        <p>若供應商支援替代 port，收信可以；但要直接寄到其他郵件伺服器就需要 outbound TCP 25。請供應商解鎖，或自己接 relay；iMail 不會把被擋的 port 藏成一個普通的 timeout。</p>
+        <p>若供應商支援替代 port，收信可以；但要直接寄到其他郵件伺服器就需要 outbound TCP 25。請供應商解鎖，或改成自己設定的 relay。</p>
       </details>
       <details>
         <summary>多網域時怎麼登入？</summary>
@@ -360,7 +344,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
       </details>
       <details>
         <summary>IPv6-only 或 IPv4-only 主機可以跑嗎？</summary>
-        <p>可以。<code>listenMode</code> 與 <code>egressMode</code> 彼此獨立，啟動時發現設定的族別不存在會記警告並改用另一族；送到雙棧目的地時使用 Happy Eyeballs。</p>
+        <p>可以。只有 IPv4、只有 IPv6 或雙棧的主機都能跑；啟動時若設定的位址族不存在，會改用另一族並記錄原因。只存在於缺少那一族的目的地無法送達，會回報為暫時性失敗。</p>
       </details>
       <details>
         <summary>為什麼是 AGPL？</summary>
@@ -375,8 +359,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
 <footer class="site-footer">
   <div class="container">
     <div class="fine">
-      <strong>iMail</strong> 是給自己網域用的自架郵件伺服器：單一 Go binary、內嵌 Vue 3 前端，
-      執行時不需要任何外部服務。
+      <strong>iMail</strong> 是給自己網域用的自架郵件伺服器，授權 AGPL-3.0。
     </div>
     <nav aria-label="頁尾">
       <a href="https://github.com/noelbennettz/imail">原始碼</a>
