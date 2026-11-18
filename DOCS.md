@@ -474,6 +474,24 @@ check the mail listener logs and the host firewall separately.
 `TZ` changes neither log lines nor stored timestamps: iMail sets the process
 local zone to UTC, and the browser renders dates in the device's local time.
 
+### Removing it
+
+State is the `./config` directory, not a Docker volume. What each command
+removes:
+
+| Command | Removes | Keeps |
+| --- | --- | --- |
+| `docker compose stop` | the running container | container, `./config`, image |
+| `docker compose down` | the container and the compose network | `./config`, the image, the compose file |
+| `docker compose down -v` | the above and any named volumes the file declares | `./config` — it is a bind mount, delete the directory yourself |
+| `docker image rm imail:internal` (or `ghcr.io/noelbennettz/imail:latest`) | the image | — |
+| `docker rm -f imail` | the container of a `docker run` deployment | `/srv/imail/config`, the image |
+
+`rm -rf config/` deletes the configuration, the database, the DKIM key and every
+certificate: the mailboxes and their mail are in that SQLite file, so it cannot
+be undone. Copy the directory first ([Backups and upgrades](#backups-and-upgrades)).
+The host firewall and DNS records are untouched by any of these commands.
+
 ### Updating
 
 ```bash

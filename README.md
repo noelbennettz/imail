@@ -43,6 +43,17 @@ Open `http://<server-ip>/` and complete the setup wizard (database,
 administrator, domains, DNS records, TLS). It exists only before the first
 successful initialization, so finish it on a trusted network.
 
+Check it came up: `docker compose ps` shows `Up … (healthy)` after the
+45-second start period, `curl -s http://127.0.0.1/api/ping` answers
+`{"errorNo":0,"errorMsg":"","data":"pong"}`, and the browser shows the setup
+wizard (or the login page once it is finished).
+
+Removing it later: `docker compose down` removes the container and keeps
+`./config`; `docker compose down -v` also removes named volumes — with the
+shipped Compose files state is a bind mount, so `./config` stays until you
+delete the directory. [DOCS.md](DOCS.md#removing-it) has the details, including
+what `docker run` leaves behind.
+
 To run the published image instead of building locally:
 
 ```bash
