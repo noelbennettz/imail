@@ -1,5 +1,8 @@
 # iMail documentation
 
+> Applies to the current `main`, published as `ghcr.io/noelbennettz/imail:latest`.
+> Older releases keep their documentation under `docs/versions/<tag>/`.
+
 iMail is a self-hosted mail server for your own domains: one Go binary with an
 embedded Vue 3 client. [README.md](README.md) carries the requirements and the
 shortest install path; this file is the reference for everything else.
@@ -151,7 +154,11 @@ Open `http://<server-ip>/` and complete the wizard:
 After the wizard finishes, iMail restarts its listeners and the mailbox is
 available at the web domain. The setup wizard is only available before the
 first successful initialization; complete it promptly and do not expose a
-fresh, unconfigured instance to an untrusted network.
+fresh, unconfigured instance to an untrusted network. The wizard itself is
+served over plain HTTP — it runs before a certificate exists — so the
+administrator password set in step 2 crosses the network in clear text; run the
+first setup from the machine's console, an SSH tunnel or a VPN, not over the
+public internet.
 
 ### First login
 
@@ -222,6 +229,12 @@ same numbers on the host. On a rootless Docker host, publish high host ports and
 map them to the container ports (for example `8080:80` and `18443:443`) because
 rootless Docker cannot bind ports below 1024.
 
+Port 25 is not optional for inbound mail. An MX record carries no port, so a
+remote server always connects to port 25 on the host it resolves; a listener on
+another port is usable by clients you configure yourself (for example your own
+users submitting on 587), not by the internet. If your provider blocks inbound
+25, put a relay or a host with 25 open in front and point the MX record there.
+
 ### Address families
 
 `listenMode` controls which sockets are bound: `both` (Go’s dual-stack
@@ -257,6 +270,33 @@ mail hostnames must be present in the certificate’s SAN list. If you use a
 reverse proxy for the web UI, either preserve the original hostname and SNI or
 add the public hostname to `serverHostnames`; do not disable SNI validation
 unless you fully understand the exposure.
+
+
+## Delivery and retries
+
+iMail delivers synchronously, inside the SMTP transaction that handed it the
+message. There is no queue, no scheduled retry and no delivery-status
+notification (bounce) of its own.
+
+- **Order**: the recipient domain's MX hosts are tried in priority order. Each
+  MX is tried on port 25 (STARTTLS), then 587 (STARTTLS), then 465 (implicit
+  TLS). A 5xx answer from a remote server stops the attempt for that domain;
+  anything else moves on to the next MX (RFC 5321 §5.1).
+- **Result**: if every MX fails, the submitting side gets `451` (temporary) for a
+  network error or a 4xx answer from the remote server, or `550` (permanent)
+  when the remote rejected the message with 5xx, with the failing domain and
+  reason in the reply.
+- **Who retries**: the sender's own MTA queue. When another mail server hands
+  iMail a message for a local mailbox and iMail then cannot deliver it onward,
+  that server receives the 451/550 and retries on its own schedule.
+- **No bounce is generated**: a permanently rejected message is reported to the
+  submitting client at that moment, not mailed back to the local sender later.
+- **Restart**: nothing is queued, so a restart cannot lose queued mail — and it
+  cannot resume a delivery that was in progress either. The sender is told 451
+  and tries again.
+- **If you need store-and-forward** — retry for days, bounces to the sender,
+  per-recipient status — put a real MTA (Postfix, Exim) or a relay in front and
+  let it queue; iMail then only delivers what that MTA hands it.
 
 
 ## Using the mailbox

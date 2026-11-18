@@ -253,7 +253,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
     <div class="split">
       <div>
         <ul class="checks">
-          <li><strong>Port 25 decides deliverability.</strong> Inbound for mail, outbound for sending. Many hosting providers block it; receiving on more ports does not fix sending.</li>
+          <li><strong>Port 25 decides whether mail flows.</strong> Remote servers connect to inbound 25 only (an MX record has no port field), and outbound 25 is needed to send. Many providers block both; an extra listener on another port only helps the clients you configure yourself.</li>
           <li><strong>Account names are unique across domains.</strong> <code>alice@one.example</code> and <code>alice@two.example</code> cannot coexist; create <code>alice</code> and <code>alice-sales</code> instead.</li>
           <li><strong>TLS needs the hostname clients use.</strong> SNI is checked strictly, so every name a client connects to must be in the certificate. Behind a reverse proxy, preserve SNI and the public hostname.</li>
           <li><strong>Not every certificate renews itself.</strong> HTTP-01 and Cloudflare DNS-01 do; manual DNS-01 records and uploaded certificates you replace by hand.</li>
@@ -330,7 +330,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
       </details>
       <details>
         <summary>My VPS blocks port 25. Can I still use it?</summary>
-        <p>You can receive on alternate ports if your provider supports that, but sending directly to other mail servers needs outbound TCP 25. Ask the provider to unblock it, or send through a relay you configure yourself.</p>
+        <p>Only partly. Other mail servers always connect to port 25 — an MX record has no port field — so if inbound 25 is blocked, mail from the internet cannot reach iMail; put a relay or a host with 25 open in front. Your own users can still submit on 587, and outbound delivery needs outbound 25 or a relay.</p>
       </details>
       <details>
         <summary>How does login work with multiple domains?</summary>

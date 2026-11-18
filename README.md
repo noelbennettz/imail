@@ -1,5 +1,9 @@
 # iMail — a self-hosted mail server for your own domains
 
+> Applies to the current `main`, published as `ghcr.io/noelbennettz/imail:latest`
+> (also tagged `main` and `sha-<commit>`). Documentation for an older release is
+> kept under `docs/versions/<tag>/`.
+
 [![Website](https://img.shields.io/badge/website-noelbennettz.github.io%2Fimail-4f8dff)](https://noelbennettz.github.io/imail/)
 [![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Container image](https://img.shields.io/badge/ghcr.io-imail-blue?logo=github)](https://github.com/noelbennettz/imail/pkgs/container/imail)
@@ -24,12 +28,28 @@ supported for larger deployments. iMail is licensed under AGPL-3.0.
 - Port 80 available for ACME HTTP-01, unless you use DNS-01 or upload a
   certificate.
 
-Many VPS and residential providers block port 25. If port 25 is blocked, iMail
-can still receive on alternate ports, but it can send through a relay only if
-you configure that relay yourself; check with your provider before debugging
-the application.
+Many VPS and residential providers block port 25. Mail from other servers
+always arrives on port 25 — an MX record carries no port — so if inbound 25 is
+blocked, remote mail cannot reach iMail directly; the working setup is a relay
+or a second host that accepts on 25 and forwards. Your own users can submit on
+587 regardless. Outbound delivery to other mail servers also needs outbound 25,
+or a relay you configure yourself; check with your provider before debugging the
+application.
 
 ## Quick start
+
+The published image is the fastest path and needs no build:
+
+```bash
+mkdir -p config
+docker compose -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.ghcr.yml up -d
+docker compose -f docker-compose.ghcr.yml logs -f imail
+```
+
+To build from this checkout instead — this compiles the Vue frontend and the Go
+binary, stays silent for several minutes and needs more memory than a 1 GB VPS
+comfortably has:
 
 ```bash
 git clone https://github.com/noelbennettz/imail.git
@@ -41,7 +61,10 @@ docker compose logs -f imail
 
 Open `http://<server-ip>/` and complete the setup wizard (database,
 administrator, domains, DNS records, TLS). It exists only before the first
-successful initialization, so finish it on a trusted network.
+successful initialization, so finish it on a trusted network. The wizard is
+served over plain HTTP — TLS is configured at the end of it — so the
+administrator password crosses the network in clear text until then; use an SSH
+tunnel, a VPN, or the machine's console for the first run.
 
 Check it came up: `docker compose ps` shows `Up … (healthy)` after the
 45-second start period, `curl -s http://127.0.0.1/api/ping` answers
@@ -53,15 +76,6 @@ Removing it later: `docker compose down` removes the container and keeps
 shipped Compose files state is a bind mount, so `./config` stays until you
 delete the directory. [DOCS.md](DOCS.md#removing-it) has the details, including
 what `docker run` leaves behind.
-
-To run the published image instead of building locally:
-
-```bash
-mkdir -p config
-docker compose -f docker-compose.ghcr.yml pull
-docker compose -f docker-compose.ghcr.yml up -d
-docker compose -f docker-compose.ghcr.yml logs -f imail
-```
 
 ## Documentation
 

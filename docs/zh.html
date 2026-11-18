@@ -197,7 +197,7 @@ docker compose -f docker-compose.ghcr.yml logs -f imail</code></pre>
       </div>
     </div>
     <p class="note">
-      <strong>先確認 25 port，再開始除錯。</strong>很多 VPS 擋 outbound TCP 25；收信可以，但要寄到其他郵件伺服器就得請供應商解鎖。
+      <strong>先確認 25 port，再開始除錯。</strong>很多 VPS 擋 outbound TCP 25，信就寄不出去；inbound 25 沒開則外網的信進不來（MX 沒有 port 欄位）。兩者都要請供應商處理。
       Rootless Docker 不能綁 1024 以下，請改成高埠映射（<code>8080:80</code>、<code>18443:443</code>…）。
     </p>
   </div>
@@ -248,7 +248,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
     <div class="split">
       <div>
         <ul class="checks">
-          <li><strong>25 port 決定能不能送信。</strong>收信靠 inbound、寄信靠 outbound。很多主機商直接封鎖；多開幾個收信 port 並不能解決寄信。</li>
+          <li><strong>25 port 決定能不能收發。</strong>外網寄信只會連 inbound 25（MX 沒有 port 欄位），寄外需要 outbound 25；很多主機商兩邊都封，替代 port 只對你自己設定的用戶端有用。</li>
           <li><strong>帳號名稱在網域之間是唯一的。</strong><code>alice@one.example</code> 與 <code>alice@two.example</code> 不能並存，請改成 <code>alice</code> 與 <code>alice-sales</code>。</li>
           <li><strong>TLS 要用用戶端連線的名字。</strong>SNI 檢查嚴格，用戶端連的每個名字都必須在憑證裡。放在反向代理後面時，要保留 SNI 與公開主機名。</li>
           <li><strong>不是所有憑證都會自動續期。</strong>HTTP-01 與 Cloudflare DNS-01 會；手動 DNS-01 與上傳的憑證要自己換。</li>
@@ -324,7 +324,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
       </details>
       <details>
         <summary>VPS 擋 25 port，還能用嗎？</summary>
-        <p>若供應商支援替代 port，收信可以；但要直接寄到其他郵件伺服器就需要 outbound TCP 25。請供應商解鎖，或改成自己設定的 relay。</p>
+        <p>不完全能。其他郵件伺服器只會連 25——MX 紀錄沒有 port 欄位——所以 inbound 25 被封就收不到外網的信，只能前面放 relay 或一台 25 開著的機器。自己人仍可用 587 投稿，寄外則需要 outbound 25 或 relay。</p>
       </details>
       <details>
         <summary>多網域時怎麼登入？</summary>
