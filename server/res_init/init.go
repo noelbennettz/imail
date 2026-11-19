@@ -14,6 +14,7 @@ import (
 	"github.com/noelbennettz/imail/listen/imap_server"
 	"github.com/noelbennettz/imail/listen/pop3_server"
 	"github.com/noelbennettz/imail/listen/smtp_server"
+	"github.com/noelbennettz/imail/services/queue"
 	"github.com/noelbennettz/imail/services/setup/ssl"
 	"github.com/noelbennettz/imail/session"
 	"github.com/noelbennettz/imail/signal"
@@ -44,6 +45,8 @@ func Init(serverVersion string) {
 			panic(err)
 		}
 		session.Init()
+		// The outbound queue worker resumes pending deliveries from the last run.
+		queue.Start()
 		// smtp server start
 		go smtp_server.Start()
 		go smtp_server.StartWithTLS()
@@ -71,6 +74,9 @@ func Init(serverVersion string) {
 		select {
 		case <-signal.RestartChan:
 			log.Infof("Server Restart!")
+			// Stop the worker first: a delivery in flight finishes and its result is
+			// stored before the process reloads.
+			queue.Stop()
 			smtp_server.Stop()
 			http_server.HttpsStop()
 			http_server.HttpStop()
@@ -78,6 +84,7 @@ func Init(serverVersion string) {
 			imap_server.Stop()
 		case <-signal.StopChan:
 			log.Infof("Server Stop!")
+			queue.Stop()
 			smtp_server.Stop()
 			http_server.HttpsStop()
 			http_server.HttpStop()

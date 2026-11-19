@@ -287,31 +287,48 @@ unless you fully understand the exposure.
 
 ## Delivery and retries
 
-iMail delivers synchronously, inside the SMTP transaction that handed it the
-message. There is no queue, no scheduled retry and no delivery-status
-notification (bounce) of its own.
+iMail keeps a durable outbound queue for mail addressed to other domains. The
+submitting client is told the message was accepted (`250`) once the message and
+its queue row are committed, and a background worker delivers it from then on.
+Messages to mailboxes this server hosts are still delivered inline, inside the
+same SMTP transaction, as before.
 
+- **Durability**: the body is written to the database before `DATA` is
+  acknowledged. The message row and the queue row commit in one transaction, so
+  either both exist or the client gets `451` and retries. A crash between the
+  commit and the delivery therefore loses nothing.
 - **Order**: the recipient domain's MX hosts are tried in priority order. Each
   MX is tried on port 25 (STARTTLS), then 587 (STARTTLS), then 465 (implicit
   TLS). A 5xx answer from a remote server stops the attempt for that domain;
   anything else moves on to the next MX (RFC 5321 §5.1).
-- **Result**: if every MX fails, the submitting side gets `451` (temporary) for a
-  network error or a 4xx answer from the remote server, or `550` (permanent)
-  when the remote rejected the message with 5xx, with the failing domain and
-  reason in the reply.
-- **Who retries**: the sender's own MTA queue. When another mail server hands
-  iMail a message for a local mailbox and iMail then cannot deliver it onward,
-  that server receives the 451/550 and retries on its own schedule.
-- **No bounce is generated**: a permanently rejected message is reported to the
-  submitting client at that moment, not mailed back to the local sender later.
-- **Restart**: nothing is queued, so a restart cannot lose queued mail — and it
-  cannot resume a delivery that was in progress either. The message is either
-  already accepted (the sender got 250) or still the sender's responsibility: a
-  delivery cut short by a restart looks like a failed connection to the sending
-  server, which retries on its own schedule.
-- **If you need store-and-forward** — retry for days, bounces to the sender,
-  per-recipient status — put a real MTA (Postfix, Exim) or a relay in front and
-  let it queue; iMail then only delivers what that MTA hands it.
+- **Retries**: a temporary failure (network error, 4xx reply) is retried after
+  1 minute, 5 minutes, 15 minutes, 1 hour, 6 hours and then every 24 hours. An
+  entry is given up when the next attempt would fall outside 72 hours from
+  acceptance. A permanent 5xx reply fails the entry immediately.
+- **Status**: the sent-folder row stays *delivery pending* while the queue entry
+  is waiting, and becomes *sent* or *failed* (with the last error) when the
+  worker finishes. Every attempt is logged with the queue id, the message id and
+  the recipients.
+- **Outbox panel**: the Security page under Administration shows the number of
+  waiting and finally failed outbound messages, read-only.
+- **Restart**: pending entries are stored in the database and the worker claims
+  them again at startup, so a restart resumes delivery without any action. A row
+  that was being delivered when the process stopped is retried after its lease
+  expires, which can deliver it twice in that single case (at-least-once).
+- **One worker**: a single worker runs per process, and a row is claimed with a
+  short lease in a conditional update, so two concurrent deliveries of the same
+  row cannot happen.
+- **If a local recipient copy fails** while a remote copy is queued, the SMTP
+  client already has its `250`: the inline failure is recorded on the sent copy
+  and the queued copies are still delivered.
+- **No bounce is generated**: a permanently rejected message is marked failed in
+  the sent folder and logged; it is not mailed back to the local sender.
+- **Storage**: the `email_queue` table keeps delivered and failed rows as a
+  delivery record, like the rest of the database. It lives in the same database
+  file or server as the mailboxes, so the existing backup covers it.
+- **If you need bounces or per-recipient reports** — put a real MTA (Postfix,
+  Exim) or a relay in front; iMail then delivers what that MTA hands it and
+  queues only the remote recipients.
 
 
 ## Using the mailbox
@@ -366,7 +383,9 @@ settings icon. The page is split into personal settings and administration.
   on by default: five failed SMTP, IMAP or POP3 sign-ins within fifteen minutes
   refuse further attempts from the same source address and for the same account
   for fifteen minutes. The switch is applied immediately, without a restart,
-  and is saved in `config.json`.
+  and is saved in `config.json`. The same page shows the **outbox**: how many
+  outbound messages are waiting for delivery to other servers and how many have
+  finally failed. It is read-only; the queue drains itself.
 - **Domains** — add or remove configured domains. A domain with users cannot be
   removed, and the primary domain cannot be removed. Removing a domain triggers
   a listener reload.

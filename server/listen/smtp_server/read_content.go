@@ -74,7 +74,7 @@ func (s *Session) Data(r io.Reader) error {
 			return nil
 		}
 
-		return s.deliverOutgoingEmail(email, send.Send)
+		return s.deliverOutgoingEmail(email, send.SendTo)
 
 	} else {
 		// Inbound mail
@@ -98,7 +98,7 @@ func (s *Session) Data(r io.Reader) error {
 			email.Status = int(consts.EmailStatusJunk)
 		}
 
-		users, dbEmail, saveErr := saveEmail(ctx, len(emailData), emailData, email, 0, 0, s.To, SPFStatus, dkimStatus)
+		users, dbEmail, saveErr := saveEmail(ctx, len(emailData), emailData, email, 0, 0, s.To, SPFStatus, dkimStatus, nil)
 		if saveErr != nil {
 			log.WithContext(ctx).Errorf("CRITICAL audit_event=initial_persist_failed direction=inbound msg_id=%q error=%v", email.MsgID, saveErr)
 			var smtpErr *smtplib.SMTPError
@@ -138,7 +138,9 @@ func (s *Session) Data(r io.Reader) error {
 	return nil
 }
 
-func saveEmail(ctx *context.Context, size int, rawMIME []byte, email *parsemail.Email, sendUserID int, emailType int, reallyTo []string, SPFStatus, dkimStatus bool) ([]*models.User, *models.Email, error) {
+// saveEmail writes the message, its mailbox relations and - for outbound mail
+// with remote recipients - the outbound queue row in one transaction.
+func saveEmail(ctx *context.Context, size int, rawMIME []byte, email *parsemail.Email, sendUserID int, emailType int, reallyTo []string, SPFStatus, dkimStatus bool, enqueue *outboundQueue) ([]*models.User, *models.Email, error) {
 	if email == nil {
 		return nil, nil, oerrors.New("email is missing")
 	}
@@ -217,7 +219,7 @@ func saveEmail(ctx *context.Context, size int, rawMIME []byte, email *parsemail.
 	}
 
 	log.WithContext(ctx).Debugf("Saving to database!")
-	saved, err := persistInitialAudit(ctx, modelEmail, userIDs)
+	saved, err := persistInitialAudit(ctx, modelEmail, userIDs, enqueue)
 	if err != nil {
 		return users, nil, err
 	}

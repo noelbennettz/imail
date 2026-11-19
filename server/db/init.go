@@ -116,6 +116,10 @@ func syncTables() {
 	if err != nil {
 		panic(err)
 	}
+	err = Instance.Sync2(&models.EmailQueue{})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func fixHistoryData() {

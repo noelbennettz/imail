@@ -1,4 +1,7 @@
 export default {
+  "outbox_desc": "Courrier sortant encore en attente de remise à d'autres serveurs, et messages définitivement en échec. La remise est retentée avec un délai croissant pendant trois jours au plus.",
+  "outbox_pending": "En attente",
+  "outbox_failed": "Échec",
   "admin_security": "Sécurité",
   "security_desc": "Protections appliquées à tout le serveur pour la connexion au courrier.",
   "limit_failed_signins": "Limiter les échecs de connexion",

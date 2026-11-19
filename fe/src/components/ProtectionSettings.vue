@@ -12,6 +12,21 @@
       </div>
       <el-switch v-model="limitFailedSignins" :loading="saving" @change="save"/>
     </div>
+
+    <el-divider class="settings-divider"/>
+
+    <div class="settings-header">
+      <h3>{{ lang.outbox }}</h3>
+      <p class="settings-desc">{{ lang.outbox_desc }}</p>
+    </div>
+
+    <div class="setting-row">
+      <div class="setting-text">
+        <span class="setting-label">{{ lang.outbox_pending }}: {{ outbox.pending }}</span>
+        <span class="setting-hint">{{ lang.outbox_failed }}: {{ outbox.failed }}</span>
+      </div>
+      <el-button size="small" :loading="loadingOutbox" @click="loadOutbox">{{ lang.refresh }}</el-button>
+    </div>
   </div>
 </template>
 
@@ -23,11 +38,23 @@ import {http} from '@/utils/axios'
 
 const limitFailedSignins = ref(true)
 const saving = ref(false)
+const outbox = ref({pending: 0, failed: 0})
+const loadingOutbox = ref(false)
 
 const load = () => {
   http.get('/api/admin/security').then(res => {
     if (res.errorNo !== 0) return
     limitFailedSignins.value = res.data.limitFailedSignins !== false
+  })
+}
+
+const loadOutbox = () => {
+  loadingOutbox.value = true
+  http.get('/api/admin/outbox').then(res => {
+    if (res.errorNo !== 0) return
+    outbox.value = {pending: res.data.pending || 0, failed: res.data.failed || 0}
+  }).finally(() => {
+    loadingOutbox.value = false
   })
 }
 
@@ -48,12 +75,20 @@ const save = (value) => {
   })
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadOutbox()
+})
 </script>
 
 <style scoped>
 .settings-card {
   padding: 0;
+}
+
+.settings-divider {
+  margin: 32px 0;
+  border-color: var(--pm-border-color);
 }
 
 .settings-header {

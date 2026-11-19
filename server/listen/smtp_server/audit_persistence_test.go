@@ -33,7 +33,7 @@ func TestOutgoingAuditInsertFailureDoesNotDeliver(t *testing.T) {
 
 	var deliveries atomic.Int32
 	session := newAuditTestSession()
-	err := session.deliverOutgoingEmail(newAuditTestEmail("insert-busy@example.com"), func(*context.Context, *parsemail.Email) (error, map[string]error) {
+	err := session.deliverOutgoingEmail(newAuditTestEmail("insert-busy@example.com"), func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 		deliveries.Add(1)
 		return nil, nil
 	})
@@ -47,7 +47,7 @@ func TestOutgoingAuditInsertFailureDoesNotDeliver(t *testing.T) {
 	if err := blocker.Rollback(); err != nil {
 		t.Fatal(err)
 	}
-	if err := session.deliverOutgoingEmail(newAuditTestEmail("insert-busy@example.com"), func(*context.Context, *parsemail.Email) (error, map[string]error) {
+	if err := session.deliverOutgoingEmail(newAuditTestEmail("insert-busy@example.com"), func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 		deliveries.Add(1)
 		return nil, nil
 	}); err != nil {
@@ -71,7 +71,7 @@ func TestOutgoingAuditRetriesBusyInitialInsertBeforeDeliver(t *testing.T) {
 	}()
 
 	var deliveries atomic.Int32
-	err := newAuditTestSession().deliverOutgoingEmail(newAuditTestEmail("initial-retry@example.com"), func(*context.Context, *parsemail.Email) (error, map[string]error) {
+	err := newAuditTestSession().deliverOutgoingEmail(newAuditTestEmail("initial-retry@example.com"), func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 		deliveries.Add(1)
 		return nil, nil
 	})
@@ -97,7 +97,7 @@ func TestOutgoingAuditRelationInsertRollsBackEmail(t *testing.T) {
 	}
 
 	email := newAuditTestEmail("relation-failure@example.com")
-	_, _, err := saveEmail(newAuditTestSession().Ctx, email.Size, nil, email, 1, int(consts.EmailTypeSend), nil, true, true)
+	_, _, err := saveEmail(newAuditTestSession().Ctx, email.Size, nil, email, 1, int(consts.EmailTypeSend), nil, true, true, nil)
 	if err == nil {
 		t.Fatal("saveEmail() error = nil, want relation insert failure")
 	}
@@ -130,7 +130,7 @@ func TestIncomingAuditRelationInsertRollsBackEmail(t *testing.T) {
 		Size:   4,
 		MsgID:  "incoming-relation-failure@example.net",
 	}
-	_, _, err := saveEmail(&context.Context{}, email.Size, nil, email, 0, int(consts.EmailTypeReceive), []string{"recipient@example.com"}, true, true)
+	_, _, err := saveEmail(&context.Context{}, email.Size, nil, email, 0, int(consts.EmailTypeReceive), []string{"recipient@example.com"}, true, true, nil)
 	if err == nil {
 		t.Fatal("saveEmail() error = nil, want incoming relation insert failure")
 	}
@@ -142,7 +142,7 @@ func TestOutgoingAuditRetriesBusyFinalUpdateAtomically(t *testing.T) {
 	var blocker *sql.Tx
 
 	session := newAuditTestSession()
-	err := session.deliverOutgoingEmail(newAuditTestEmail("final-retry@example.com"), func(*context.Context, *parsemail.Email) (error, map[string]error) {
+	err := session.deliverOutgoingEmail(newAuditTestEmail("final-retry@example.com"), func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 		blocker = beginAuditReadTransaction(t, dsn)
 		go func() {
 			time.Sleep(35 * time.Millisecond)
@@ -192,7 +192,7 @@ func TestAcceptedDeliveryWithPermanentAuditLockReturnsSuccessAndAlerts(t *testin
 		log.SetLevel(oldLevel)
 	})
 
-	err := newAuditTestSession().deliverOutgoingEmail(newAuditTestEmail("accepted-unknown@example.com"), func(*context.Context, *parsemail.Email) (error, map[string]error) {
+	err := newAuditTestSession().deliverOutgoingEmail(newAuditTestEmail("accepted-unknown@example.com"), func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 		deliveries.Add(1)
 		blocker = beginAuditReadTransaction(t, dsn)
 		return nil, nil
@@ -220,7 +220,7 @@ func TestTemporaryDeliveryFailureWithUnpersistedResultCanRetryAsNewAttempt(t *te
 	session := newAuditTestSession()
 	messageID := "temporary-unpersisted@example.com"
 
-	err := session.deliverOutgoingEmail(newAuditTestEmail(messageID), func(*context.Context, *parsemail.Email) (error, map[string]error) {
+	err := session.deliverOutgoingEmail(newAuditTestEmail(messageID), func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 		deliveries.Add(1)
 		blocker = beginAuditReadTransaction(t, dsn)
 		return errors.New("delivery failed"), map[string]error{
@@ -232,7 +232,7 @@ func TestTemporaryDeliveryFailureWithUnpersistedResultCanRetryAsNewAttempt(t *te
 		t.Fatal(err)
 	}
 
-	if err = session.deliverOutgoingEmail(newAuditTestEmail(messageID), func(*context.Context, *parsemail.Email) (error, map[string]error) {
+	if err = session.deliverOutgoingEmail(newAuditTestEmail(messageID), func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 		deliveries.Add(1)
 		return nil, nil
 	}); err != nil {
@@ -267,7 +267,7 @@ func TestOutgoingAuditPersistsDeliveryFailure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			engine, _ := newAuditTestEngine(t)
 			deliveryErr := errors.New("delivery failed")
-			err := newAuditTestSession().deliverOutgoingEmail(newAuditTestEmail(tt.name+"-failure@example.com"), func(*context.Context, *parsemail.Email) (error, map[string]error) {
+			err := newAuditTestSession().deliverOutgoingEmail(newAuditTestEmail(tt.name+"-failure@example.com"), func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 				return deliveryErr, map[string]error{"example.net": tt.domainErr}
 			})
 			assertSMTPCode(t, err, tt.wantCode)
@@ -280,7 +280,7 @@ func TestOutgoingAuditPersistsDeliveryFailure(t *testing.T) {
 func TestPermanentDeliveryFailureSurvivesFinalAuditLock(t *testing.T) {
 	engine, dsn := newAuditTestEngine(t)
 	var blocker *sql.Tx
-	err := newAuditTestSession().deliverOutgoingEmail(newAuditTestEmail("permanent-failure@example.com"), func(*context.Context, *parsemail.Email) (error, map[string]error) {
+	err := newAuditTestSession().deliverOutgoingEmail(newAuditTestEmail("permanent-failure@example.com"), func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 		blocker = beginAuditReadTransaction(t, dsn)
 		failure := &textproto.Error{Code: 550, Msg: "mailbox unavailable"}
 		return errors.New("delivery failed"), map[string]error{"example.net": failure}
@@ -296,7 +296,7 @@ func TestPermanentDeliveryFailureSurvivesFinalAuditLock(t *testing.T) {
 func TestSameMessageIDCreatesIndependentSubmissions(t *testing.T) {
 	engine, _ := newAuditTestEngine(t)
 	var deliveries atomic.Int32
-	sender := func(*context.Context, *parsemail.Email) (error, map[string]error) {
+	sender := func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 		deliveries.Add(1)
 		return nil, nil
 	}
@@ -320,7 +320,7 @@ func TestOutgoingPendingAuditMailboxVisibility(t *testing.T) {
 	engine, _ := newAuditTestEngine(t)
 	session := newAuditTestSession()
 	email := newAuditTestEmail("pending-visibility@example.com")
-	_, saved, err := saveEmail(session.Ctx, email.Size, nil, email, session.Ctx.UserID, int(consts.EmailTypeSend), nil, true, true)
+	_, saved, err := saveEmail(session.Ctx, email.Size, nil, email, session.Ctx.UserID, int(consts.EmailTypeSend), nil, true, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,9 +416,12 @@ func newAuditTestSession() *Session {
 func newAuditTestEmail(messageID string) *parsemail.Email {
 	from := &parsemail.User{Name: "Sender", EmailAddress: "sender@example.com"}
 	return &parsemail.Email{
-		From:    from,
-		Sender:  from,
-		To:      []*parsemail.User{{EmailAddress: "recipient@example.net"}},
+		From:   from,
+		Sender: from,
+		// A local-domain recipient keeps these tests on the inline delivery path;
+		// remote recipients now go through the outbound queue, covered by
+		// queue_test.go.
+		To:      []*parsemail.User{{EmailAddress: "recipient@example.com"}},
 		Subject: "audit reliability",
 		Text:    []byte("body"),
 		Size:    4,
@@ -426,7 +429,7 @@ func newAuditTestEmail(messageID string) *parsemail.Email {
 	}
 }
 
-func successfulAuditSender(*context.Context, *parsemail.Email) (error, map[string]error) {
+func successfulAuditSender(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
 	return nil, nil
 }
 
