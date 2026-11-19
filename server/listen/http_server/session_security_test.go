@@ -34,7 +34,7 @@ func newAuthFixture(t *testing.T) *authFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := engine.Sync2(&models.User{}); err != nil {
+	if err := engine.Sync2(&models.User{}, &models.Email{}, &models.UserEmail{}, &models.EmailQueue{}); err != nil {
 		t.Fatal(err)
 	}
 	f := &authFixture{
