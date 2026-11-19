@@ -1,14 +1,18 @@
 # syntax=docker/dockerfile:1
 # iMail - internal use build.
 ARG BUILDPLATFORM
-FROM --platform=$BUILDPLATFORM node:22-alpine AS febuild
+# Base images are pinned by digest (the multi-arch manifest list) so a rebuild
+# cannot silently pick up a different image. To update, run
+#   docker buildx imagetools inspect <image>:<tag>
+# and replace the digest.
+FROM --platform=$BUILDPLATFORM node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS febuild
 WORKDIR /work
 
 COPY fe .
 RUN yarn install --frozen-lockfile --network-timeout 600000 && yarn build
 
 
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS serverbuild
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab AS serverbuild
 ARG VERSION=internal
 ARG TARGETOS
 ARG TARGETARCH
@@ -22,7 +26,7 @@ RUN cd /work/server && GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     -o imail main.go
 
 
-FROM alpine:3.21
+FROM alpine:3.21@sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab
 
 LABEL org.opencontainers.image.title="iMail" \
       org.opencontainers.image.description="Self-hosted mail server" \

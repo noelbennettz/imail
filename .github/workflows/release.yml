@@ -1,0 +1,128 @@
+name: Release
+
+# Publishing a v* tag is the only trigger. The workflow builds the versioned
+# multi-arch image, signs it with cosign keyless (the workflow's OIDC identity),
+# generates an SPDX SBOM with a pinned syft, attests the SBOM to the image and
+# attaches everything to a GitHub release. The tag itself is created by hand and
+# is the human decision this workflow acts on.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # create the GitHub release and upload assets
+  packages: write   # push the image to GHCR
+  id-token: write   # cosign keyless signing and attestation
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+  COSIGN_VERSION: v3.1.4
+  SYFT_VERSION: v1.57.2
+
+jobs:
+  release:
+    name: Build, sign, attest and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - name: Build and push the versioned image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install cosign (pinned)
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+
+      - name: Sign the image (keyless, OIDC)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
+      - name: Generate the SPDX SBOM (pinned syft)
+        uses: anchore/sbom-action@v0
+        with:
+          syft-version: ${{ env.SYFT_VERSION }}
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: imail-${{ github.ref_name }}.spdx.json
+          upload-artifact: false
+
+      - name: Attest the SBOM to the image
+        run: |
+          cosign attest --yes \
+            --predicate "imail-${GITHUB_REF_NAME}.spdx.json" \
+            --type spdxjson \
+            "${IMAGE}@${{ steps.build.outputs.digest }}"
+
+      - name: Write the release notes
+        run: |
+          cat > release-notes.md <<'NOTES'
+          Container image: ${{ env.IMAGE }}:${{ github.ref_name }}
+
+          Verify the signature and the SBOM:
+
+          ```bash
+          cosign verify "${{ env.IMAGE }}:${{ github.ref_name }}" \
+            --certificate-identity-regexp '^https://github.com/${{ github.repository }}/.github/workflows/release.yml@' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          cosign verify-attestation --type spdxjson "${{ env.IMAGE }}:${{ github.ref_name }}" \
+            --certificate-identity-regexp '^https://github.com/${{ github.repository }}/.github/workflows/release.yml@' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          ```
+
+          The SPDX SBOM is attached to this release and also attested to the image.
+          NOTES
+          echo "" >> release-notes.md
+          echo "Image digest: \`${{ steps.build.outputs.digest }}\`" >> release-notes.md
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md \
+            "imail-${GITHUB_REF_NAME}.spdx.json"
