@@ -30,7 +30,10 @@ type EmailQueue struct {
 	LeaseUntil   time.Time      `xorm:"lease_until comment('a delivering row may be claimed again after this time')"`
 	LastError    sql.NullString `xorm:"last_error text"`
 	CreateTime   time.Time      `xorm:"create_time created"`
-	UpdateTime   time.Time      `xorm:"update_time updated index(ix_email_queue_state_time)"`
+	// UpdateTime is set explicitly by every queue update, not by xorm's
+	// `updated` tag: the tag adds its own assignment on an UPDATE, which
+	// PostgreSQL rejects as a duplicate assignment to the same column.
+	UpdateTime time.Time `xorm:"update_time index(ix_email_queue_state_time)"`
 }
 
 func (d *EmailQueue) TableName() string {

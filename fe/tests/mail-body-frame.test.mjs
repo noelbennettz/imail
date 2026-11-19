@@ -26,8 +26,11 @@ before(async () => {
   })
   await server.listen()
   baseURL = `http://127.0.0.1:${server.httpServer.address().port}`
-  browser = await puppeteer.launch({executablePath, headless: true,
-    args: process.getuid?.() === 0 ? ['--no-sandbox'] : []})
+  // --disable-dev-shm-usage: a CI container often has a tiny /dev/shm and Chrome
+  // dies there; --no-sandbox is needed when the runner is root.
+  const args = ['--disable-dev-shm-usage']
+  if (process.getuid?.() === 0) args.push('--no-sandbox')
+  browser = await puppeteer.launch({executablePath, headless: true, args})
 })
 after(async () => { await browser?.close(); await server?.close() })
 

@@ -27,7 +27,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # QEMU is only needed for the arm64 half of a published multi-arch image.
+      # A pull request builds the runner's own architecture, which is enough to
+      # prove the image still builds.
       - name: Set up QEMU
+        if: github.event_name != 'pull_request'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -58,7 +62,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
