@@ -1,0 +1,12 @@
+      # main_test.go and the IMAP/POP3 tests load ./config/ssl/{private.key,
+      # public.crt}; those files are gitignored operator data, so CI creates a
+      # throwaway self-signed pair before the suite.
+      - name: Create the TLS fixture for the integration tests
+        run: |
+          mkdir -p server/config/ssl
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout server/config/ssl/private.key \
+            -out server/config/ssl/public.crt \
+            -subj "/CN=localhost"
+
+      # main_test.go starts the real server: SMTP on 25, HTTP on 80, HTTPS on
