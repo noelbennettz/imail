@@ -8,6 +8,7 @@ import (
 
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
+	"github.com/noelbennettz/imail/internal/testdb"
 	"github.com/noelbennettz/imail/models"
 	"xorm.io/xorm"
 )
@@ -23,20 +24,31 @@ func newTestEngine(t *testing.T) (*xorm.Engine, string) {
 
 func openTestEngine(t *testing.T, dsn string) *xorm.Engine {
 	t.Helper()
-	engine, err := xorm.NewEngine("sqlite", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	engine.SetMaxOpenConns(1)
-	engine.SetMaxIdleConns(1)
-	if err = engine.Sync2(&models.User{}, &models.Email{}, &models.UserEmail{}, &models.EmailQueue{}); err != nil {
-		_ = engine.Close()
-		t.Fatal(err)
-	}
-	// The server pins time.Local to UTC (config.Init); the SQLite driver stores
-	// timestamps in the local zone, so the tests do the same to round-trip them.
+	return openEngine(t, dsn, true)
+}
+
+// reopenTestEngine opens the same database again without emptying it, which is
+// what a restart test needs.
+func reopenTestEngine(t *testing.T, dsn string) *xorm.Engine {
+	t.Helper()
+	return openEngine(t, dsn, false)
+}
+
+func openEngine(t *testing.T, dsn string, reset bool) *xorm.Engine {
+	t.Helper()
+	// The server pins time.Local to UTC (config.Init) before it opens the
+	// database. xorm reads time.Local when it builds an engine, so the tests
+	// must do it before too.
 	oldLocal := time.Local
 	time.Local = time.UTC
+	t.Cleanup(func() { time.Local = oldLocal })
+	models := []any{&models.User{}, &models.Email{}, &models.UserEmail{}, &models.EmailQueue{}}
+	var engine *xorm.Engine
+	if reset {
+		engine = testdb.Open(t, dsn, models...)
+	} else {
+		engine = testdb.Reopen(t, dsn, models...)
+	}
 	oldDB := db.Instance
 	oldConfig := config.Instance
 	db.Instance = engine
@@ -44,8 +56,6 @@ func openTestEngine(t *testing.T, dsn string) *xorm.Engine {
 	t.Cleanup(func() {
 		db.Instance = oldDB
 		config.Instance = oldConfig
-		_ = engine.Close()
-		time.Local = oldLocal
 	})
 	return engine
 }
@@ -273,7 +283,7 @@ func TestRestartRecoveryKeepsPendingEntries(t *testing.T) {
 	_ = engine.Close()
 
 	// Reopen the same database, as a restart does.
-	reopened := openTestEngine(t, dsn)
+	reopened := reopenTestEngine(t, dsn)
 	claimed, err := Claim(time.Now(), time.Minute)
 	if err != nil || claimed == nil {
 		t.Fatalf("Claim() after restart = %+v, %v; want the pending entry", claimed, err)

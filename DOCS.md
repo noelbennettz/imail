@@ -816,8 +816,24 @@ The Go server is in `server/`; the Vue 3 frontend is in `fe/`. The frontend is
 embedded into the Go binary for production, so the final image needs no Node.js
 runtime. The repository vendors Go dependencies and builds with `-mod=vendor`.
 `make test` runs with `setup_port=17888` and `IMAIL_ROOT` pointed at `server/`;
-`make test_mysql` and `make test_postgres` run the same suite against those
-databases.
+`make test_mysql` and `make test_postgres` run the root integration suite
+against a server called `mysql` or `postgres`.
+
+The queue and webmail tests can also run against a real server database. Point
+them at one and they use it instead of their throwaway SQLite file:
+
+```bash
+IMAIL_TEST_DB=mysql \
+IMAIL_TEST_DSN='root:secret@tcp(127.0.0.1:3306)/imail?parseTime=True&loc=UTC' \
+  go test -p 1 ./services/queue/ ./controllers/email/
+IMAIL_TEST_DB=postgres \
+IMAIL_TEST_DSN='postgres://postgres:secret@127.0.0.1:5432/imail?sslmode=disable' \
+  go test -p 1 ./services/queue/ ./controllers/email/
+```
+
+The CI `Tests` workflow runs exactly that against MySQL 8.4 and PostgreSQL 16
+service containers. Use `-p 1`: the tests rebuild the schema once per process,
+so two packages must not share the database at the same time.
 
 Format Go code with gofumpt (`gofumpt -l -w .`). The root integration test
 starts the real SMTP, POP3 and IMAP listeners on 25, 110, 465, 587, 993 and 995
