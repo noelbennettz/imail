@@ -335,7 +335,13 @@ being retried.
   the sent folder and logged; it is not mailed back to the local sender.
 - **Storage**: the `email_queue` table keeps delivered and failed rows as a
   delivery record, like the rest of the database. It lives in the same database
-  file or server as the mailboxes, so the existing backup covers it.
+  file or server as the mailboxes, so the existing backup covers it. The table
+  is bounded: a periodic cleanup (every hour, on the worker) deletes delivered
+  rows older than **7 days** and finally failed rows older than **30 days**.
+  Pending and in-flight rows are never deleted, whatever their age. Both
+  windows are the `DeliveredRetention` and `FailedRetention` variables in
+  `services/queue/retention.go`, and the delete is indexed by
+  `(state, update_time)`, so it does not scan the table.
 - **If you need bounces or per-recipient reports** — put a real MTA (Postfix,
   Exim) or a relay in front; iMail then delivers what that MTA hands it and
   queues only the remote recipients.

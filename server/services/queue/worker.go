@@ -23,23 +23,28 @@ type deliveryFunc func(ctx *context.Context, entry *models.EmailQueue, email *mo
 type Worker struct {
 	Interval time.Duration
 	Lease    time.Duration
-	Now      func() time.Time
+	// PurgeInterval is how often finished rows beyond their retention are
+	// deleted, so the table stays bounded on a long-running server.
+	PurgeInterval time.Duration
+	Now           func() time.Time
 	// deliver is nil outside tests, where send.Deliver is used.
 	deliver deliveryFunc
 
-	stop     chan struct{}
-	done     chan struct{}
-	stopOnce sync.Once
+	stop      chan struct{}
+	done      chan struct{}
+	stopOnce  sync.Once
+	nextPurge time.Time
 }
 
 // NewWorker returns a worker with the production timings.
 func NewWorker() *Worker {
 	return &Worker{
-		Interval: 10 * time.Second,
-		Lease:    DefaultLease,
-		Now:      time.Now,
-		stop:     make(chan struct{}),
-		done:     make(chan struct{}),
+		Interval:      10 * time.Second,
+		Lease:         DefaultLease,
+		Now:           time.Now,
+		stop:          make(chan struct{}),
+		PurgeInterval: time.Hour,
+		done:          make(chan struct{}),
 	}
 }
 
@@ -62,12 +67,34 @@ func (w *Worker) Run() {
 	ticker := time.NewTicker(w.Interval)
 	defer ticker.Stop()
 	for {
+		w.maintain()
 		w.Drain()
 		select {
 		case <-w.stop:
 			return
 		case <-ticker.C:
 		}
+	}
+}
+
+// maintain applies the retention policy at most once per PurgeInterval. It runs
+// before the first drain, so a restart also cleans up.
+func (w *Worker) maintain() {
+	now := w.Now().UTC()
+	if !w.nextPurge.IsZero() && now.Before(w.nextPurge) {
+		return
+	}
+	if w.PurgeInterval <= 0 {
+		w.PurgeInterval = time.Hour
+	}
+	w.nextPurge = now.Add(w.PurgeInterval)
+	delivered, failed, err := Purge(now)
+	if err != nil {
+		log.Errorf("outbox: retention cleanup failed: %v", err)
+		return
+	}
+	if delivered+failed > 0 {
+		log.Infof("outbox: purged %d delivered and %d failed rows", delivered, failed)
 	}
 }
 
