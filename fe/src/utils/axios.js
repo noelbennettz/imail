@@ -2,6 +2,7 @@ import axios from 'axios'
 import lang from '../i18n/i18n';
 import {useGlobalStatusStore} from "@/stores/useGlobalStatusStore";
 import {router} from "@/router";
+import {getSetupToken, isSetupAPI, SETUP_TOKEN_HEADER} from "@/utils/setupToken";
 
 // Create an axios instance
 const http = axios.create({
@@ -15,6 +16,12 @@ const http = axios.create({
 
 // Request interceptor
 http.interceptors.request.use((config) => {
+    // Every setup wizard call carries the one-time setup token once the first
+    // screen has accepted it.
+    if (isSetupAPI(config.url) && getSetupToken() !== '') {
+        config.headers = config.headers || {}
+        config.headers[SETUP_TOKEN_HEADER] = getSetupToken()
+    }
     // For POST requests, convert the data payload to a JSON string
     if (config.method === 'POST') {
         config.data = JSON.stringify(config.data);
@@ -27,7 +34,7 @@ http.interceptors.request.use((config) => {
 // Response interceptor
 http.interceptors.response.use(async (response) => {
     // Successful response
-    if (response.data.errorNo === 403) {
+    if (response.data.errorNo === 403 && !isSetupAPI(response.config?.url)) {
 
         await router.replace({
             path: '/login',
@@ -58,12 +65,18 @@ http.interceptors.response.use(async (response) => {
                 message = 'Request error';
                 break;
             case 403:
-               await router.replace({
-                    path: '/login',
-                    query: {
-                        redirect: router.currentRoute.fullPath
-                    }
-                });
+               if (!isSetupAPI(error.config?.url)) {
+                   await router.replace({
+                        path: '/login',
+                        query: {
+                            redirect: router.currentRoute.fullPath
+                        }
+                    });
+               }
+                message = 'Request error';
+                break;
+            case 429:
+                message = 'Too many attempts';
                 break;
             case 404:
                 message = 'Requested address error';

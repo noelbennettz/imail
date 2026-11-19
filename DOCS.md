@@ -109,7 +109,8 @@ docker run -d \
 container and should be backed up: it contains the configuration, database,
 DKIM key and TLS certificates.
 
-Then open `http://<server-ip>/` and complete the setup wizard. The same ports
+Then open `http://<server-ip>/` and complete the setup wizard. Its first screen
+asks for the setup token printed in `docker compose logs imail`. The same ports
 are used by the Compose example; on rootless Docker publish high host ports
 instead (`-p 8080:80 -p 18443:443`, and so on).
 
@@ -139,16 +140,26 @@ persistent and back it up.
 
 Open `http://<server-ip>/` and complete the wizard:
 
-1. **Database** — SQLite is the default and works well for a small server.
+1. **Setup token** — the server prints a one-time token at startup, in a banner
+   ending with `Read it again with: docker compose logs imail`. Copy that
+   24-character token (letters and digits) into the first screen. The token is
+   generated only while the deployment is uninitialised, exists in memory only,
+   is never written to `config/`, and is discarded once setup succeeds. Every
+   wizard request carries it as the `X-Setup-Token` header. Missing or wrong
+   tokens get `403`, five failures from one address get `429` for fifteen
+   minutes, and more than twenty failures in fifteen minutes pause verification
+   for everybody until the window drains. Only the static client, `/api/ping`
+   and a minimal status endpoint answer without a token.
+2. **Database** — SQLite is the default and works well for a small server.
    Choose MySQL or PostgreSQL if you already operate one.
-2. **Administrator** — choose an administrator account and a password of at
+3. **Administrator** — choose an administrator account and a password of at
    least 8 characters. Administrator accounts also use the mailbox login rules
    described below.
-3. **Domains** — set the primary mail domain, the browser-facing web domain
+4. **Domains** — set the primary mail domain, the browser-facing web domain
    (for example `mail.example.com`) and any additional domains.
-4. **DNS** — copy the generated records into your DNS provider. The wizard
+5. **DNS** — copy the generated records into your DNS provider. The wizard
    shows A/AAAA, MX, SPF, DKIM, DMARC and PTR guidance.
-5. **TLS** — choose HTTP-01, DNS-01 (manual or Cloudflare) or an uploaded
+6. **TLS** — choose HTTP-01, DNS-01 (manual or Cloudflare) or an uploaded
    certificate.
 
 After the wizard finishes, iMail restarts its listeners and the mailbox is
@@ -156,9 +167,10 @@ available at the web domain. The setup wizard is only available before the
 first successful initialization; complete it promptly and do not expose a
 fresh, unconfigured instance to an untrusted network. The wizard itself is
 served over plain HTTP — it runs before a certificate exists — so the
-administrator password set in step 2 crosses the network in clear text; run the
+administrator password set in step 3 crosses the network in clear text; run the
 first setup from the machine's console, an SSH tunnel or a VPN, not over the
-public internet.
+public internet. The setup token closes the race with a stranger who reaches
+the port first; it does not encrypt anything in transit.
 
 ### First login
 
@@ -508,10 +520,11 @@ configuration, SQLite database, DKIM key and TLS material. Keep that volume on
 persistent storage.
 
 The container health check calls `/api/ping`. While the HTTP listener answers,
-the endpoint returns HTTP 200: after setup with `{"data":"pong"}`, and during
-setup through the setup handler. A passing probe therefore only shows that the
-HTTP listener responded. If the container is healthy but mail is not working,
-check the mail listener logs and the host firewall separately.
+the endpoint returns HTTP 200 with `{"data":"pong"}` — during setup as well as
+after it, because the health check runs before the wizard is finished. A passing
+probe therefore only shows that the HTTP listener responded. If the container is
+healthy but mail is not working, check the mail listener logs and the host
+firewall separately.
 
 `TZ` changes neither log lines nor stored timestamps: iMail sets the process
 local zone to UTC, and the browser renders dates in the device's local time.
@@ -608,6 +621,11 @@ before relying on it.
   HTTPS is enabled. Do not run an HTTPS deployment through an untrusted proxy.
 - The setup wizard is available before first initialization. Complete it on a
   trusted network and do not expose an unconfigured instance to the internet.
+  The wizard's API requires the one-time setup token printed in the container
+  log; the token lives in memory, is compared in constant time, and is dropped
+  once initialization succeeds. It prevents a stranger who reaches the port
+  first from finishing setup, but it does not encrypt the administrator password
+  in transit — use an SSH tunnel, a VPN or the machine's console.
 - “View source” stores and displays the original MIME for messages received over
   SMTP. That can include full headers and attachments; protect the database and
   backups accordingly.

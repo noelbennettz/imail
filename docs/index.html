@@ -195,7 +195,7 @@ docker compose -f docker-compose.ghcr.yml logs -f imail</code></pre>
       </div>
       <div class="step">
         <h3>Finish the setup wizard</h3>
-        <p>Open <code>http://your-server-ip/</code>: database, administrator, domains, DNS records and TLS. The wizard disappears after the first successful init, so finish it on a trusted network.</p>
+        <p>Open <code>http://your-server-ip/</code> and enter the setup token the container printed at startup: run <code>docker compose logs imail</code> and copy the 24-character line after <code>Setup token:</code>. The wizard then asks for database, administrator, domains, DNS records and TLS. The token lives in memory only, is needed for every wizard request, and disappears once setup finishes; it stops a stranger from completing setup first, but it does not encrypt the administrator password, so still finish it on a trusted network.</p>
       </div>
     </div>
     <p class="note">
@@ -290,7 +290,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-key"/></svg></div>
         <h3>First run and secrets</h3>
-        <p><code>config/config.json</code> is written with mode <code>0600</code>. The setup wizard exists only before the first successful initialisation: finish it on a trusted network, and back up <code>config/</code> without ever committing it.</p>
+        <p><code>config/config.json</code> is written with mode <code>0600</code>. The setup wizard exists only before the first successful initialisation, and its API requires the one-time setup token printed in the container log: finish it on a trusted network, and back up <code>config/</code> without ever committing it.</p>
       </article>
     </div>
   </div>

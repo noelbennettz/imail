@@ -18,6 +18,7 @@ import (
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/response"
 	"github.com/noelbennettz/imail/models"
+	"github.com/noelbennettz/imail/services/setup"
 	"github.com/noelbennettz/imail/signal"
 	"github.com/noelbennettz/imail/utils/array"
 	"github.com/spf13/cast"
@@ -303,7 +304,7 @@ func testPort(t *testing.T) {
 
 func testDataBaseSet(t *testing.T) {
 	// Read back the configuration
-	ret, err := http.Post(TestHost+"/api/setup", "application/json", strings.NewReader("{\"action\":\"get\",\"step\":\"database\"}"))
+	ret, err := postSetup("{\"action\":\"get\",\"step\":\"database\"}")
 	if err != nil {
 		t.Error(err)
 	}
@@ -334,7 +335,7 @@ func testDataBaseSet(t *testing.T) {
 	}
 
 	// Apply the configuration
-	ret, err = http.Post(TestHost+"/api/setup", "application/json", strings.NewReader(configData))
+	ret, err = postSetup(configData)
 	if err != nil {
 		t.Error(err)
 	}
@@ -347,7 +348,7 @@ func testDataBaseSet(t *testing.T) {
 	}
 
 	// Read back the configuration
-	ret, err = http.Post(TestHost+"/api/setup", "application/json", strings.NewReader("{\"action\":\"get\",\"step\":\"database\"}"))
+	ret, err = postSetup("{\"action\":\"get\",\"step\":\"database\"}")
 	if err != nil {
 		t.Error(err)
 	}
@@ -368,7 +369,7 @@ func testDataBaseSet(t *testing.T) {
 
 func testPwdSet(t *testing.T) {
 	// Read back the configuration
-	ret, err := http.Post(TestHost+"/api/setup", "application/json", strings.NewReader("{\"action\":\"get\",\"step\":\"password\"}"))
+	ret, err := postSetup("{\"action\":\"get\",\"step\":\"password\"}")
 	if err != nil {
 		t.Error(err)
 	}
@@ -380,9 +381,9 @@ func testPwdSet(t *testing.T) {
 		t.Error("Get Password Config Api Error!")
 	}
 	// Apply the configuration
-	ret, err = http.Post(TestHost+"/api/setup", "application/json", strings.NewReader(`
+	ret, err = postSetup(`
 {"action":"set","step":"password","account":"testCase","password":"testCase"}
-`))
+`)
 	if err != nil {
 		t.Error(err)
 	}
@@ -396,7 +397,7 @@ func testPwdSet(t *testing.T) {
 	}
 
 	// Read back the configuration
-	ret, err = http.Post(TestHost+"/api/setup", "application/json", strings.NewReader("{\"action\":\"get\",\"step\":\"password\"}"))
+	ret, err = postSetup("{\"action\":\"get\",\"step\":\"password\"}")
 	if err != nil {
 		t.Error(err)
 	}
@@ -417,7 +418,7 @@ func testPwdSet(t *testing.T) {
 
 func testDomainSet(t *testing.T) {
 	// Read back the configuration
-	ret, err := http.Post(TestHost+"/api/setup", "application/json", strings.NewReader("{\"action\":\"get\",\"step\":\"domain\"}"))
+	ret, err := postSetup("{\"action\":\"get\",\"step\":\"domain\"}")
 	if err != nil {
 		t.Error(err)
 	}
@@ -429,9 +430,9 @@ func testDomainSet(t *testing.T) {
 		t.Error("Get domain Config Api Error!")
 	}
 	// Apply the configuration
-	ret, err = http.Post(TestHost+"/api/setup", "application/json", strings.NewReader(`
+	ret, err = postSetup(`
 {"action":"set","step":"domain","smtp_domain":"test.domain","web_domain":"mail.test.domain"}
-`))
+`)
 	if err != nil {
 		t.Error(err)
 	}
@@ -444,7 +445,7 @@ func testDomainSet(t *testing.T) {
 	}
 
 	// Read back the configuration
-	ret, err = http.Post(TestHost+"/api/setup", "application/json", strings.NewReader("{\"action\":\"get\",\"step\":\"domain\"}"))
+	ret, err = postSetup("{\"action\":\"get\",\"step\":\"domain\"}")
 	if err != nil {
 		t.Error(err)
 	}
@@ -469,7 +470,7 @@ func testDomainSet(t *testing.T) {
 
 func testDNSSet(t *testing.T) {
 	// Read back the configuration
-	ret, err := http.Post(TestHost+"/api/setup", "application/json", strings.NewReader("{\"action\":\"get\",\"step\":\"dns\"}"))
+	ret, err := postSetup("{\"action\":\"get\",\"step\":\"dns\"}")
 	if err != nil {
 		t.Error(err)
 	}
@@ -485,7 +486,7 @@ func testDNSSet(t *testing.T) {
 
 func testSSLSet(t *testing.T) {
 	// Read back the configuration
-	ret, err := http.Post(TestHost+"/api/setup", "application/json", strings.NewReader("{\"action\":\"get\",\"step\":\"ssl\"}"))
+	ret, err := postSetup("{\"action\":\"get\",\"step\":\"ssl\"}")
 	if err != nil {
 		t.Error(err)
 	}
@@ -497,9 +498,9 @@ func testSSLSet(t *testing.T) {
 		t.Error("Get domain Config Api Error!")
 	}
 	// Apply the configuration
-	ret, err = http.Post(TestHost+"/api/setup", "application/json", strings.NewReader(`
+	ret, err = postSetup(`
 {"action":"set","step":"ssl","ssl_type":"1","key_path":"./config/ssl/private.key","crt_path":"./config/ssl/public.crt"}
-`))
+`)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1005,6 +1006,20 @@ func portCheck(port int) bool {
 	}
 	defer l.Close()
 	return false
+}
+
+// postSetup posts to the setup wizard API with the one-time setup token the
+// running process printed in its banner.
+func postSetup(body string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodPost, TestHost+"/api/setup", strings.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token := setup.CurrentToken(); token != nil {
+		req.Header.Set(setup.TokenHeader, token.Token())
+	}
+	return http.DefaultClient.Do(req)
 }
 
 func readResponse(r io.Reader) (*response.Response, error) {

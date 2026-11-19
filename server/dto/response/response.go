@@ -9,8 +9,13 @@ const (
 	NeedSetup          = 402
 	NeedLogin          = 403
 	NoAccessPrivileges = 405
-	ParamsError        = 100
-	ServerError        = 500
+	// InvalidSetupToken is the error code of the setup wizard when the one-time
+	// setup token is missing, wrong or no longer accepted. The HTTP status is
+	// 403; the distinct code keeps the web client from treating it as an
+	// expired login session.
+	InvalidSetupToken = 406
+	ParamsError       = 100
+	ServerError       = 500
 )
 
 type Response struct {

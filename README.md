@@ -60,11 +60,19 @@ docker compose logs -f imail
 ```
 
 Open `http://<server-ip>/` and complete the setup wizard (database,
-administrator, domains, DNS records, TLS). It exists only before the first
-successful initialization, so finish it on a trusted network. The wizard is
-served over plain HTTP — TLS is configured at the end of it — so the
-administrator password crosses the network in clear text until then; use an SSH
-tunnel, a VPN, or the machine's console for the first run.
+administrator, domains, DNS records, TLS). The first screen asks for the setup
+token: the server prints it at startup, in a banner that ends with
+`Read it again with: docker compose logs imail`. Copy the 24-character token
+from `docker compose logs imail` into that screen; every later wizard request
+carries it as the `X-Setup-Token` header. The token is generated only while the
+deployment is uninitialised, lives in memory, never touches `config/`, and is
+discarded when setup finishes.
+
+The wizard exists only before the first successful initialization, so finish it
+on a trusted network. It is served over plain HTTP — TLS is configured at the
+end of it — so the token stops a stranger from completing setup first, but it
+does not encrypt the administrator password on the wire; use an SSH tunnel, a
+VPN, or the machine's console for the first run.
 
 Check it came up: `docker compose ps` shows `Up … (healthy)` after the
 45-second start period, `curl -s http://127.0.0.1/api/ping` answers

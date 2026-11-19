@@ -18,6 +18,9 @@ func Finish() error {
 	if err != nil {
 		return errors.Wrap(err)
 	}
+	// The setup token has done its job: drop it from memory and close the setup
+	// API for good.
+	ClearToken()
 	// Initialization complete
 	signal.InitChan <- true
 	return nil

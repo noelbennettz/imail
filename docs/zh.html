@@ -193,7 +193,7 @@ docker compose -f docker-compose.ghcr.yml logs -f imail</code></pre>
       </div>
       <div class="step">
         <h3>完成安裝精靈</h3>
-        <p>開 <code>http://your-server-ip/</code>：資料庫、管理員、網域、DNS 紀錄與 TLS。第一次初始化成功後精靈就會消失，請先在可信網路完成。</p>
+        <p>開 <code>http://your-server-ip/</code>，輸入容器啟動時印出的安裝 token：執行 <code>docker compose logs imail</code>，複製 <code>Setup token:</code> 後面那 24 個字元。接著精靈才會詢問資料庫、管理員、網域、DNS 紀錄與 TLS。token 只存在記憶體，精靈的每個請求都要帶，初始化完成後即消失；它能阻止陌生人搶先完成安裝，但不會加密管理員密碼，所以仍請在可信網路完成。</p>
       </div>
     </div>
     <p class="note">
@@ -285,7 +285,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
       <article class="card">
         <div class="icon"><svg aria-hidden="true"><use href="#i-key"/></svg></div>
         <h3>第一次啟動與機密</h3>
-        <p><code>config/config.json</code> 以 <code>0600</code> 寫入。安裝精靈只在第一次成功初始化之前存在：請在可信網路完成，備份 <code>config/</code>，但不要 commit。</p>
+        <p><code>config/config.json</code> 以 <code>0600</code> 寫入。安裝精靈只在第一次成功初始化之前存在，而且它的 API 需要容器日誌印出的一次性安裝 token：請在可信網路完成，備份 <code>config/</code>，但不要 commit。</p>
       </article>
     </div>
   </div>
