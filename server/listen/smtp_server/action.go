@@ -11,6 +11,7 @@ import (
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/models"
+	"github.com/noelbennettz/imail/services/loginlimit"
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/id"
 	"github.com/noelbennettz/imail/utils/password"
@@ -84,6 +85,15 @@ func (s *Session) AuthPlain(username, pwd string) error {
 	if requestedDomain == "" && len(config.Instance.Domains) > 1 {
 		return errors.New("specify the mailbox domain with @")
 	}
+
+	// A blocked source or account gets the same reply as a wrong password,
+	// before any account lookup or password hashing happens.
+	source := loginlimit.SourceKey(s.RemoteAddress)
+	if loginlimit.Blocked(source, username) {
+		log.WithContext(s.Ctx).Debugf("SMTP authentication blocked by the failed sign-in limiter")
+		return errors.New("password error")
+	}
+
 	_, err := db.Instance.Where("account =? and disabled=0", account).Get(&user)
 	if err != nil && err != sql.ErrNoRows {
 		log.Errorf("%+v", err)
@@ -106,10 +116,12 @@ func (s *Session) AuthPlain(username, pwd string) error {
 		s.Ctx.UserDomain = user.Domain
 		s.Ctx.IsAdmin = user.IsAdmin == 1
 
+		loginlimit.Success(source, username)
 		log.WithContext(s.Ctx).Debugf("SMTP authentication succeeded for user %d", user.ID)
 		return nil
 	}
 
+	loginlimit.Failure(source, username)
 	log.WithContext(s.Ctx).Debugf("SMTP authentication failed for %q", username)
 	return errors.New("password error")
 }

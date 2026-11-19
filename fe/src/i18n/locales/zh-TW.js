@@ -1,4 +1,9 @@
 export default {
+  "admin_security": "安全防護",
+  "security_desc": "對整個伺服器的郵件登入保護。",
+  "limit_failed_signins": "限制登入失敗次數",
+  "limit_failed_signins_desc": "15 分鐘內失敗 5 次後，同一來源位址與同一帳號的登入會被拒絕 15 分鐘，並回傳協定原有的認證失敗。計數器只保存在記憶體中，伺服器重新啟動後清除。",
+  "saved": "已儲存",
   "logout": "登出",
   "resetPwd": "重設帳號密碼",
   "disabled": "停用",

@@ -8,6 +8,7 @@ import (
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/models"
+	"github.com/noelbennettz/imail/services/loginlimit"
 	"github.com/noelbennettz/imail/utils/errors"
 	"github.com/noelbennettz/imail/utils/password"
 	log "github.com/sirupsen/logrus"
@@ -21,6 +22,13 @@ func (s *serverSession) Login(username, pwd string) error {
 		requestedDomain = strings.ToLower(strings.TrimSpace(parts[1]))
 	} else if len(config.Instance.Domains) > 1 {
 		return &imap.Error{Type: imap.StatusResponseTypeNo, Code: imap.ResponseCodeAuthenticationFailed, Text: "Specify the mailbox domain with @"}
+	}
+
+	// A blocked source or account is refused before any account lookup or
+	// password hashing, with the same reply a wrong password gets.
+	if loginlimit.Blocked(s.remoteAddr, username) {
+		log.WithContext(s.ctx).Debug("Login blocked by the failed sign-in limiter")
+		return invalidCredentials()
 	}
 
 	var user models.User
@@ -44,12 +52,20 @@ func (s *serverSession) Login(username, pwd string) error {
 		s.ctx.UserName = user.Name
 		s.ctx.UserAccount = user.Account
 		s.ctx.UserDomain = user.Domain
+		loginlimit.Success(s.remoteAddr, username)
 		log.WithContext(s.ctx).Debug("Login successful")
 
 		return nil
 	}
 
+	loginlimit.Failure(s.remoteAddr, username)
 	log.WithContext(s.ctx).Info("user not found")
+	return invalidCredentials()
+}
+
+// invalidCredentials is the single authentication failure IMAP reports, so a
+// blocked attempt looks exactly like a wrong password.
+func invalidCredentials() error {
 	return &imap.Error{
 		Type: imap.StatusResponseTypeNo,
 		Code: imap.ResponseCodeAuthenticationFailed,

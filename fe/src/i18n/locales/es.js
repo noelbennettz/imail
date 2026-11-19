@@ -1,4 +1,9 @@
 export default {
+  "admin_security": "Seguridad",
+  "security_desc": "Protecciones para todo el servidor en el inicio de sesión del correo.",
+  "limit_failed_signins": "Limitar los inicios de sesión fallidos",
+  "limit_failed_signins_desc": "Tras 5 intentos fallidos en 15 minutos, se rechazan los intentos desde la misma dirección y para la misma cuenta durante 15 minutos, con el error de autenticación habitual del protocolo. Los contadores solo se guardan en memoria y se reinician al reiniciar el servidor.",
+  "saved": "Guardado",
   "logout": "Cerrar sesión",
   "resetPwd": "Restablecer la contraseña de la cuenta",
   "disabled": "Deshabilitado",

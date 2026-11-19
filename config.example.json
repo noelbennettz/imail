@@ -19,5 +19,6 @@
   "tlsMaxVersion": "1.3",
   "disableSNICheck": false,
   "serverHostnames": [],
-  "defaultQuotaMB": 1024
+  "defaultQuotaMB": 1024,
+  "limitFailedSignins": true
 }

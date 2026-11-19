@@ -1,4 +1,9 @@
 export default {
+  "admin_security": "安全防护",
+  "security_desc": "对整个服务器的邮件登录保护。",
+  "limit_failed_signins": "限制登录失败次数",
+  "limit_failed_signins_desc": "15 分钟内失败 5 次后，同一来源地址和同一账号的登录会被拒绝 15 分钟，并返回协议原有的认证失败提示。计数器只保存在内存中，服务器重启后清零。",
+  "saved": "已保存",
   "logout": "注销",
   "resetPwd": "重置账号密码",
   "disabled": "禁用",

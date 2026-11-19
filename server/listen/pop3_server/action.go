@@ -14,6 +14,7 @@ import (
 	"github.com/noelbennettz/imail/services/del_email"
 	"github.com/noelbennettz/imail/services/detail"
 	"github.com/noelbennettz/imail/services/list"
+	"github.com/noelbennettz/imail/services/loginlimit"
 	"github.com/noelbennettz/imail/third_party/gopop"
 	"github.com/noelbennettz/imail/utils/array"
 	"github.com/noelbennettz/imail/utils/context"
@@ -103,6 +104,14 @@ func (a action) Pass(session *gopop.Session, pwd string) error {
 	}
 	log.WithContext(session.Ctx).Debugf("POP3 PASS attempt, User:%s", session.User)
 
+	source := loginlimit.SourceKeyConn(session.Conn)
+	// A blocked source or account is refused before any account lookup or
+	// password hashing, with the same reply a wrong password gets.
+	if loginlimit.Blocked(source, session.User) {
+		log.WithContext(session.Ctx).Debugf("POP3 authentication blocked by the failed sign-in limiter")
+		return errors2.New("password error")
+	}
+
 	account := session.User
 	requestedDomain := ""
 	if parts := strings.SplitN(account, "@", 2); len(parts) == 2 {
@@ -134,9 +143,11 @@ func (a action) Pass(session *gopop.Session, pwd string) error {
 		session.Ctx.(*context.Context).UserAccount = user.Account
 		session.Ctx.(*context.Context).UserDomain = user.Domain
 
+		loginlimit.Success(source, session.User)
 		return nil
 	}
 
+	loginlimit.Failure(source, session.User)
 	return errors2.New("password error")
 }
 

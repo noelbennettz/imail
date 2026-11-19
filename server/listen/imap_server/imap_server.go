@@ -8,6 +8,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/noelbennettz/imail/config"
+	"github.com/noelbennettz/imail/services/loginlimit"
 	"github.com/noelbennettz/imail/utils/netutil"
 	"github.com/noelbennettz/imail/utils/tlsutil"
 	log "github.com/sirupsen/logrus"
@@ -48,7 +49,7 @@ func newIMAPServer() *imapserver.Server {
 
 	option := &imapserver.Options{
 		NewSession: func(conn *imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-			return memServer.NewSession(), nil, nil
+			return memServer.newSession(loginlimit.SourceKeyConn(conn.NetConn())), nil, nil
 		},
 		Caps: imap.CapSet{
 			imap.CapIMAP4rev1: {},

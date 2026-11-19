@@ -37,10 +37,18 @@ type serverSession struct {
 	currentMailbox string
 	connectTime    time.Time
 	deleteUidList  []int
+	// remoteAddr is the client address without port, used to key the
+	// failed sign-in limiter.
+	remoteAddr string
 }
 
 // NewSession creates a new IMAP session.
 func (s *Server) NewSession() imapserver.Session {
+	return s.newSession("")
+}
+
+// newSession creates a session that remembers the client address.
+func (s *Server) newSession(remoteAddr string) imapserver.Session {
 	tc := &context.Context{}
 	tc.SetValue(context.LogID, id.GenLogID())
 
@@ -48,6 +56,7 @@ func (s *Server) NewSession() imapserver.Session {
 		server:      s,
 		ctx:         tc,
 		connectTime: time.Now(),
+		remoteAddr:  remoteAddr,
 	}
 }
 
