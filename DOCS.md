@@ -604,6 +604,9 @@ before relying on it.
 
 ## Security notes
 
+How to report a vulnerability, which versions are supported and what is out of
+scope is in [SECURITY.md](SECURITY.md). The list below is what the code does.
+
 - Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes (210,000
   iterations). Password changes revoke existing sessions. Minimum length is 8
   characters.

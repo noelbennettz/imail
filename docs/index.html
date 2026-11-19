@@ -107,6 +107,7 @@
         </a>
       </div>
       <div class="pills">
+        <span class="pill">Status: beta</span>
         <span class="pill">SMTP · IMAPS · POP3S</span>
         <span class="pill">IPv4 + IPv6</span>
         <span class="pill">7 UI languages</span>
@@ -274,7 +275,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
   <div class="container">
     <div class="section-head">
       <h2>Security defaults</h2>
-      <p>What the server does with passwords, TLS and the first run.</p>
+      <p>What the server does with passwords, TLS and the first run. iMail is in beta: versions may change incompatibly, so back up <code>config/</code> before upgrading.</p>
     </div>
     <div class="grid">
       <article class="card">
@@ -291,6 +292,11 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
         <div class="icon"><svg aria-hidden="true"><use href="#i-key"/></svg></div>
         <h3>First run and secrets</h3>
         <p><code>config/config.json</code> is written with mode <code>0600</code>. The setup wizard exists only before the first successful initialisation, and its API requires the one-time setup token printed in the container log: finish it on a trusted network, and back up <code>config/</code> without ever committing it.</p>
+      </article>
+      <article class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
+        <h3>Reporting a vulnerability</h3>
+        <p>Use the <strong>Security</strong> tab and <strong>Report a vulnerability</strong> on <a href="https://github.com/noelbennettz/imail">GitHub</a>. If that form is unavailable, open an issue titled “Security contact request” with no technical details. <a href="https://github.com/noelbennettz/imail/blob/main/SECURITY.md">SECURITY.md</a> lists the supported versions and what is in scope; there is no response-time guarantee.</p>
       </article>
     </div>
   </div>
