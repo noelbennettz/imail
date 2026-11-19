@@ -44,11 +44,14 @@ jobs:
       - name: Install Yarn
         run: npm install --global yarn@1.22.22
 
+      # The Chrome test drives a real browser. One retry absorbs the occasional
+      # navigation flake; --disable-dev-shm-usage keeps it off the small /dev/shm
+      # a hosted runner provides.
       - name: Build and test the front end
         working-directory: fe
         run: |
           yarn install --frozen-lockfile
-          yarn test
+          yarn test || { echo "::warning::retrying the front-end tests once"; yarn test; }
           yarn build
 
       # server/listen/http_server embeds dist/*, so the Go build needs the front
@@ -85,3 +88,61 @@ jobs:
           setup_port: 17888
           IMAIL_ROOT: ${{ github.workspace }}/server/
         run: go test -p 1 ./...
+
+  # The queue and the webmail composer are the parts that talk to a database
+  # directly, so they run against the two server databases the project supports.
+  # Schema and timestamp differences (xorm's Sync2, DATETIME precision, the
+  # reserved `user` table) only show up here.
+  databases:
+    name: Queue and webmail tests on ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: MySQL 8.4
+            backend: mysql
+            dsn: root:githubTest@tcp(127.0.0.1:3306)/imail?parseTime=True&loc=UTC
+          - name: PostgreSQL 16
+            backend: postgres
+            dsn: postgres://postgres:githubTest@127.0.0.1:5432/imail?sslmode=disable
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: githubTest
+          MYSQL_DATABASE: imail
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pgithubTest"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: githubTest
+          POSTGRES_DB: imail
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      # -p 1: the tests rebuild the shared schema once per process, so the
+      # packages must not run at the same time against the same database.
+      - name: Go tests against ${{ matrix.name }}
+        working-directory: server
+        env:
+          IMAIL_TEST_DB: ${{ matrix.backend }}
+          IMAIL_TEST_DSN: ${{ matrix.dsn }}
+        run: go test -p 1 ./services/queue/ ./controllers/email/

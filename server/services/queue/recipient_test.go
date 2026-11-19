@@ -100,7 +100,7 @@ func TestLocalRecipientSurvivesRestart(t *testing.T) {
 	if err := engine.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened := openTestEngine(t, dsn)
+	reopened := reopenTestEngine(t, dsn)
 
 	entry, err := Claim(now, DefaultLease)
 	if err != nil {
@@ -134,7 +134,8 @@ func TestLocalRecipientSurvivesRestart(t *testing.T) {
 func TestFinalFailureStoresADeliveryStatusNotification(t *testing.T) {
 	engine, _ := newTestEngine(t)
 	now := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
-	if _, err := engine.Insert(&models.User{Account: "sender", Name: "Sender"}); err != nil {
+	sender := models.User{Account: "sender", Name: "Sender"}
+	if _, err := engine.Insert(&sender); err != nil {
 		t.Fatal(err)
 	}
 	email := insertEmail(t, engine, "bounce@example.com")
@@ -166,7 +167,7 @@ func TestFinalFailureStoresADeliveryStatusNotification(t *testing.T) {
 	if err := engine.Where("email_id = ?", bounce.Id).Find(&relations); err != nil {
 		t.Fatal(err)
 	}
-	if len(relations) != 1 || relations[0].UserID != 1 {
+	if len(relations) != 1 || relations[0].UserID != sender.ID {
 		t.Fatalf("bounce mailbox relations = %+v, want the sender's mailbox", relations)
 	}
 }

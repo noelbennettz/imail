@@ -18,6 +18,7 @@ import (
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/parsemail"
 	"github.com/noelbennettz/imail/dto/response"
+	"github.com/noelbennettz/imail/internal/testdb"
 	"github.com/noelbennettz/imail/models"
 	"github.com/noelbennettz/imail/services/queue"
 	"github.com/noelbennettz/imail/utils/context"
@@ -54,15 +55,22 @@ func initWebmailTestDKIM(t *testing.T) {
 
 func openWebmailTestEngine(t *testing.T, dsn string) *xorm.Engine {
 	t.Helper()
-	engine, err := xorm.NewEngine("sqlite", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	engine.SetMaxOpenConns(1)
-	engine.SetMaxIdleConns(1)
-	if err = engine.Sync2(&models.User{}, &models.Email{}, &models.UserEmail{}, &models.EmailQueue{}); err != nil {
-		_ = engine.Close()
-		t.Fatal(err)
+	return openWebmailEngine(t, dsn, true)
+}
+
+func reopenWebmailTestEngine(t *testing.T, dsn string) *xorm.Engine {
+	t.Helper()
+	return openWebmailEngine(t, dsn, false)
+}
+
+func openWebmailEngine(t *testing.T, dsn string, reset bool) *xorm.Engine {
+	t.Helper()
+	models := []any{&models.User{}, &models.Email{}, &models.UserEmail{}, &models.EmailQueue{}}
+	var engine *xorm.Engine
+	if reset {
+		engine = testdb.Open(t, dsn, models...)
+	} else {
+		engine = testdb.Reopen(t, dsn, models...)
 	}
 	oldDB := db.Instance
 	oldConfig := config.Instance
@@ -71,7 +79,6 @@ func openWebmailTestEngine(t *testing.T, dsn string) *xorm.Engine {
 	t.Cleanup(func() {
 		db.Instance = oldDB
 		config.Instance = oldConfig
-		_ = engine.Close()
 	})
 	return engine
 }
@@ -181,7 +188,7 @@ func TestWebmailQueuedMessageSurvivesRestart(t *testing.T) {
 	// A restart closes and reopens the database; the worker claims the rows
 	// again without any user action.
 	_ = engine.Close()
-	openWebmailTestEngine(t, dsn)
+	reopenWebmailTestEngine(t, dsn)
 	claimed := 0
 	for {
 		entry, err := queue.Claim(time.Now(), time.Minute)
@@ -199,6 +206,9 @@ func TestWebmailQueuedMessageSurvivesRestart(t *testing.T) {
 }
 
 func TestWebmailSendReportsCommitFailure(t *testing.T) {
+	if !testdb.IsSQLite() {
+		t.Skip("the test forces a write failure with a SQLite trigger")
+	}
 	engine, _ := useWebmailTestDatabase(t)
 	if _, err := engine.Exec(`CREATE TRIGGER fail_webmail_queue_insert
 		BEFORE INSERT ON email_queue
