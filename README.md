@@ -105,7 +105,7 @@ can check against the code.
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, tests, and the sign-off every commit needs (DCO). |
 | [SECURITY.md](SECURITY.md) | Supported versions, how to report a vulnerability, and what is in scope. |
 | [DOCS.md](DOCS.md) | Features, installation detail, DNS records, ports and TLS, mailbox and administration, certificates, configuration reference, operations, backups, security notes, troubleshooting, development. |
-| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Licence of every vendored Go module, front-end package and copied source file. |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Licence of every vendored Go module, front-end package, copied source file and container system package. |
 | [`docs/`](docs/) | Project site in English and Traditional Chinese, published at <https://noelbennettz.github.io/imail/> |
 | [docker-compose.example.yml](docker-compose.example.yml) | Every compose port, volume and variable, commented in place. |
 

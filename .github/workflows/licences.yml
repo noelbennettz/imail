@@ -1,0 +1,77 @@
+name: Licences
+
+# Two scans with a fixed tool version: the Go modules the server links and the
+# production dependencies of the front end. Both allow Apache-2.0, BSD-2-Clause,
+# BSD-3-Clause, ISC, MIT and MPL-2.0; a dependency under any other licence fails
+# the build. THIRD_PARTY_NOTICES.md lists the same components for humans.
+#
+# MPL-2.0 is there for one unmodified dependency: github.com/go-sql-driver/mysql,
+# the optional MySQL driver. MPL-2.0 is file-level copyleft and is compatible
+# with AGPL-3.0 for an unpatched library; iMail never patches it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: licences-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go dependency licences
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      # Pinned: go-licenses v1.6.0, license-checker 25.0.1 (see the front-end job).
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@v1.6.0
+
+      - name: Check the licence of every linked Go module
+        working-directory: server
+        run: |
+          set -euo pipefail
+          "$(go env GOPATH)/bin/go-licenses" check ./... \
+            --ignore github.com/noelbennettz/imail \
+            --ignore modernc.org/mathutil \
+            --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0
+        # modernc.org/mathutil is BSD-3-Clause (server/vendor/modernc.org/mathutil/LICENSE)
+        # but the licence classifier inside go-licenses v1.6.0 does not recognise
+        # the text, so it is skipped here and verified by hand instead.
+
+  frontend:
+    name: Front-end dependency licences
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: fe/yarn.lock
+
+      - name: Install dependencies
+        working-directory: fe
+        run: yarn install --frozen-lockfile
+
+      - name: Check the licence of every production dependency
+        run: |
+          set -euo pipefail
+          npx --yes license-checker@25.0.1 --start fe \
+            --production --excludePrivatePackages \
+            --onlyAllow "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;MPL-2.0"
