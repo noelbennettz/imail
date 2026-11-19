@@ -4,6 +4,9 @@
 > (also tagged `main` and `sha-<commit>`). Documentation for an older release is
 > kept under `docs/versions/<tag>/`.
 
+**Status: beta** — incompatible changes between versions are possible, so back
+up `config/` before you upgrade.
+
 [![Website](https://img.shields.io/badge/website-noelbennettz.github.io%2Fimail-4f8dff)](https://noelbennettz.github.io/imail/)
 [![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Container image](https://img.shields.io/badge/ghcr.io-imail-blue?logo=github)](https://github.com/noelbennettz/imail/pkgs/container/imail)
@@ -85,10 +88,21 @@ shipped Compose files state is a bind mount, so `./config` stays until you
 delete the directory. [DOCS.md](DOCS.md#removing-it) has the details, including
 what `docker run` leaves behind.
 
+## Security
+
+Report a vulnerability through GitHub's private reporting: **Security** →
+**Report a vulnerability** on <https://github.com/noelbennettz/imail>. If that
+form is unavailable, open an issue titled `Security contact request` that says
+nothing about the technical details. [SECURITY.md](SECURITY.md) lists the
+supported versions, what is in and out of scope, and what to expect. The
+[security notes in DOCS.md](DOCS.md#security-notes) describe the behaviour you
+can check against the code.
+
 ## Documentation
 
 | File | Contents |
 | --- | --- |
+| [SECURITY.md](SECURITY.md) | Supported versions, how to report a vulnerability, and what is in scope. |
 | [DOCS.md](DOCS.md) | Features, installation detail, DNS records, ports and TLS, mailbox and administration, certificates, configuration reference, operations, backups, security notes, troubleshooting, development. |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Licence of every vendored Go module, front-end package and copied source file. |
 | [`docs/`](docs/) | Project site in English and Traditional Chinese, published at <https://noelbennettz.github.io/imail/> |

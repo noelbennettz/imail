@@ -105,6 +105,7 @@
         </a>
       </div>
       <div class="pills">
+        <span class="pill">狀態：beta</span>
         <span class="pill">SMTP · IMAPS · POP3S</span>
         <span class="pill">IPv4 + IPv6</span>
         <span class="pill">七種介面語言</span>
@@ -269,7 +270,7 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
   <div class="container">
     <div class="section-head">
       <h2>安全預設</h2>
-      <p>密碼、TLS 與第一次啟動時，伺服器實際的作法。</p>
+      <p>密碼、TLS 與第一次啟動時，伺服器實際的作法。iMail 目前是 beta：版本之間可能不相容，升級前請先備份 <code>config/</code>。</p>
     </div>
     <div class="grid">
       <article class="card">
@@ -286,6 +287,11 @@ _dmarc             TXT     "v=DMARC1; p=quarantine; rua=mailto:postmaster@exampl
         <div class="icon"><svg aria-hidden="true"><use href="#i-key"/></svg></div>
         <h3>第一次啟動與機密</h3>
         <p><code>config/config.json</code> 以 <code>0600</code> 寫入。安裝精靈只在第一次成功初始化之前存在，而且它的 API 需要容器日誌印出的一次性安裝 token：請在可信網路完成，備份 <code>config/</code>，但不要 commit。</p>
+      </article>
+      <article class="card">
+        <div class="icon"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
+        <h3>回報安全性問題</h3>
+        <p>請用 <a href="https://github.com/noelbennettz/imail">GitHub</a> 的 <strong>Security</strong> 分頁與 <strong>Report a vulnerability</strong>。若該表單不可用，開一個標題為「Security contact request」、不含任何技術細節的 issue。<a href="https://github.com/noelbennettz/imail/blob/main/SECURITY.md">SECURITY.md</a> 列出支援的版本與範圍；不承諾回應時限。</p>
       </article>
     </div>
   </div>
