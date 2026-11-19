@@ -314,7 +314,15 @@ being retried.
   *failed* (with the last error) when a domain finally gave up. Every attempt is
   logged with the queue id, the message id and the recipients.
 - **Outbox panel**: the Security page under Administration shows the number of
-  waiting and finally failed queue rows — one per remote domain — read-only.
+  waiting and finally failed queue rows — one per remote domain — and lets an
+  administrator inspect them. The list is paged and shows the recipients, the
+  attempt count, the last error and the last update. A **failed** row can be
+  retried (it goes back to the queue at once and its 72-hour retry window
+  restarts) or deleted. A delivered row can be deleted as well. Pending and
+  in-flight rows cannot be deleted: the worker still owns them, and deleting
+  one would silently drop mail. Every action is admin-only (the API endpoints
+  are `/api/admin/outbox/list`, `/retry` and `/delete`; other users get the
+  ordinary “no access” response).
 - **Restart**: pending entries are stored in the database and the worker claims
   them again at startup, so a restart resumes delivery without any action. A row
   that was being delivered when the process stopped is retried after its lease
@@ -395,7 +403,8 @@ settings icon. The page is split into personal settings and administration.
   for fifteen minutes. The switch is applied immediately, without a restart,
   and is saved in `config.json`. The same page shows the **outbox**: how many
   outbound messages are waiting for delivery to other servers and how many have
-  finally failed. It is read-only; the queue drains itself.
+  finally failed, lists the queued rows and can retry a failed one or delete a
+  finished one; the queue itself drains automatically.
 - **Domains** — add or remove configured domains. A domain with users cannot be
   removed, and the primary domain cannot be removed. Removing a domain triggers
   a listener reload.
