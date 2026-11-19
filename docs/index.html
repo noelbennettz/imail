@@ -196,7 +196,7 @@ docker compose -f docker-compose.ghcr.yml logs -f imail</code></pre>
       </div>
       <div class="step">
         <h3>Finish the setup wizard</h3>
-        <p>Open <code>http://your-server-ip/</code> and enter the setup token the container printed at startup: run <code>docker compose logs imail</code> and copy the 24-character line after <code>Setup token:</code>. The wizard then asks for database, administrator, domains, DNS records and TLS. The token lives in memory only, is needed for every wizard request, and disappears once setup finishes; it stops a stranger from completing setup first, but it does not encrypt the administrator password, so still finish it on a trusted network.</p>
+        <p>Open <code>http://your-server-ip/</code> and enter the setup token the container printed at startup: run <code>docker compose logs imail</code> and copy the 24-character token from the line beginning <code>***  Setup token:</code>. The wizard then asks for database, administrator, domains, DNS records and TLS. The token lives in memory only, is needed for every wizard request, and disappears once setup finishes; it stops a stranger from completing setup first, but it does not encrypt the administrator password, so still finish it on a trusted network.</p>
       </div>
     </div>
     <p class="note">

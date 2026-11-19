@@ -141,15 +141,15 @@ persistent and back it up.
 Open `http://<server-ip>/` and complete the wizard:
 
 1. **Setup token** — the server prints a one-time token at startup, in a banner
-   ending with `Read it again with: docker compose logs imail`. Copy that
+   containing the line `Read it again with: docker compose logs imail`. Copy that
    24-character token (letters and digits) into the first screen. The token is
    generated only while the deployment is uninitialised, exists in memory only,
    is never written to `config/`, and is discarded once setup succeeds. Every
    wizard request carries it as the `X-Setup-Token` header. Missing or wrong
-   tokens get `403`, five failures from one address get `429` for fifteen
-   minutes, and more than twenty failures in fifteen minutes pause verification
-   for everybody until the window drains. Only the static client, `/api/ping`
-   and a minimal status endpoint answer without a token.
+   tokens get `403`; after five failures from one address, further attempts get
+   `429` for fifteen minutes, and more than twenty failures in fifteen minutes
+   pause verification for everybody until the window drains. Only the static
+   client, `/api/ping` and a minimal status endpoint answer without a token.
 2. **Database** — SQLite is the default and works well for a small server.
    Choose MySQL or PostgreSQL if you already operate one.
 3. **Administrator** — choose an administrator account and a password of at

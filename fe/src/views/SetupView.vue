@@ -277,7 +277,6 @@
 import {nextTick, onMounted, reactive, ref} from 'vue'
 import {ElMessage} from 'element-plus'
 import lang from '../i18n/i18n';
-import axios from 'axios'
 import {Plus} from '@element-plus/icons-vue'
 import {http} from "@/utils/axios";
 import {clearSetupToken, getSetupToken, setSetupToken} from "@/utils/setupToken";
