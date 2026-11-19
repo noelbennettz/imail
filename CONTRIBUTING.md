@@ -10,7 +10,7 @@ commit message goes a long way.
 | --- | --- |
 | `server/` | Go backend: mail listeners, HTTP APIs, setup wizard, embedded web client. Dependencies are vendored. |
 | `fe/` | Vue 3 client, built with Vite and Yarn. The build output is embedded into the Go binary. |
-| `docs/` | The project site (`index.html` in English, `zh.html` in Traditional Chinese). |
+| [`docs/`](https://github.com/noelbennettz/noelbennettz.github.io/tree/main/docs/imail) | Not in this repository: the project site lives in `noelbennettz.github.io` under `docs/imail/` (`index.html` in English, `zh.html` in Traditional Chinese), published at <https://noelbennettz.github.io/imail/>. |
 | `README.md`, `DOCS.md` | User documentation, in English. |
 
 ## Requirements
@@ -89,7 +89,9 @@ scripts/check-dco.sh origin/main HEAD
   external mail servers or send mail.
 - Write commit messages and code comments in English.
 - User-facing behaviour goes into `README.md` or `DOCS.md` (English), and the
-  matching page in `docs/` (English and Traditional Chinese) stays in sync.
+  matching page of the project site (English and Traditional Chinese, in the
+  [`noelbennettz.github.io`](https://github.com/noelbennettz/noelbennettz.github.io)
+  repository under `docs/imail/`) stays in sync.
 - A new dependency needs its licence recorded in `THIRD_PARTY_NOTICES.md` with an
   exact version, and it has to pass the licence check that CI runs for Go and
   front-end dependencies. If the check rejects a licence, the pull request is

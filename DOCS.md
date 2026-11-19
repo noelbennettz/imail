@@ -1,13 +1,14 @@
 # iMail documentation
 
 > Applies to the current `main`, published as `ghcr.io/noelbennettz/imail:latest`.
-> Older releases keep their documentation under `docs/versions/<tag>/`.
+> Older releases keep their documentation on the project site under
+> `versions/<tag>/`.
 
 iMail is a self-hosted mail server for your own domains: one Go binary with an
 embedded Vue 3 client. [README.md](README.md) carries the requirements and the
 shortest install path; this file is the reference for everything else.
 
-![The iMail sign-in screen](docs/ui-login.png)
+![The iMail sign-in screen](https://noelbennettz.github.io/imail/ui-login.png)
 
 ## Contents
 

@@ -2,7 +2,7 @@
 
 > Applies to the current `main`, published as `ghcr.io/noelbennettz/imail:latest`
 > (also tagged `main` and `sha-<commit>`). Documentation for an older release is
-> kept under `docs/versions/<tag>/`.
+> kept on the project site under `versions/<tag>/`.
 
 **Status: beta** — incompatible changes between versions are possible, so back
 up `config/` before you upgrade.
@@ -106,7 +106,7 @@ can check against the code.
 | [SECURITY.md](SECURITY.md) | Supported versions, how to report a vulnerability, and what is in scope. |
 | [DOCS.md](DOCS.md) | Features, installation detail, DNS records, ports and TLS, mailbox and administration, certificates, configuration reference, operations, backups, security notes, troubleshooting, development. |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Licence of every vendored Go module, front-end package, copied source file and container system package. |
-| [`docs/`](docs/) | Project site in English and Traditional Chinese, published at <https://noelbennettz.github.io/imail/> |
+| [Project site](https://noelbennettz.github.io/imail/) | English and Traditional Chinese pages, hosted in the [`noelbennettz.github.io`](https://github.com/noelbennettz/noelbennettz.github.io) repository under `docs/imail/` |
 | [docker-compose.example.yml](docker-compose.example.yml) | Every compose port, volume and variable, commented in place. |
 
 ## Contributing
