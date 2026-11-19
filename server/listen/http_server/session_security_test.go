@@ -14,6 +14,7 @@ import (
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/response"
 	"github.com/noelbennettz/imail/models"
+	"github.com/noelbennettz/imail/services/loginlimit"
 	"github.com/noelbennettz/imail/session"
 	"github.com/noelbennettz/imail/utils/password"
 	_ "modernc.org/sqlite"
@@ -45,7 +46,11 @@ func newAuthFixture(t *testing.T) *authFixture {
 		t.Fatal(err)
 	}
 	oldDB, oldSession, oldInit := db.Instance, session.Instance, config.IsInit
+	oldLimiter := loginlimit.Default
 	db.Instance, session.Instance, config.IsInit = engine, scs.New(), true
+	// Every fixture starts from a clean limiter so one test's failures cannot
+	// block another test's login (all requests come from 127.0.0.1).
+	loginlimit.Default = loginlimit.New(loginlimit.DefaultOptions)
 	mux := http.NewServeMux()
 	router(mux)
 	mux.HandleFunc("/test/legacy", func(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +62,7 @@ func newAuthFixture(t *testing.T) *authFixture {
 	t.Cleanup(func() {
 		f.server.Close()
 		db.Instance, session.Instance, config.IsInit = oldDB, oldSession, oldInit
+		loginlimit.Default = oldLimiter
 		engine.Close()
 	})
 	return f

@@ -26,7 +26,7 @@ func (s *serverSession) Login(username, pwd string) error {
 
 	// A blocked source or account is refused before any account lookup or
 	// password hashing, with the same reply a wrong password gets.
-	if loginlimit.Blocked(s.remoteAddr, username) {
+	if loginlimit.Blocked(loginlimit.RealmMail, s.remoteAddr, username) {
 		log.WithContext(s.ctx).Debug("Login blocked by the failed sign-in limiter")
 		return invalidCredentials()
 	}
@@ -52,13 +52,13 @@ func (s *serverSession) Login(username, pwd string) error {
 		s.ctx.UserName = user.Name
 		s.ctx.UserAccount = user.Account
 		s.ctx.UserDomain = user.Domain
-		loginlimit.Success(s.remoteAddr, username)
+		loginlimit.Success(loginlimit.RealmMail, s.remoteAddr, username)
 		log.WithContext(s.ctx).Debug("Login successful")
 
 		return nil
 	}
 
-	loginlimit.Failure(s.remoteAddr, username)
+	loginlimit.Failure(loginlimit.RealmMail, s.remoteAddr, username)
 	log.WithContext(s.ctx).Info("user not found")
 	return invalidCredentials()
 }

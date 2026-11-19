@@ -107,7 +107,7 @@ func (a action) Pass(session *gopop.Session, pwd string) error {
 	source := loginlimit.SourceKeyConn(session.Conn)
 	// A blocked source or account is refused before any account lookup or
 	// password hashing, with the same reply a wrong password gets.
-	if loginlimit.Blocked(source, session.User) {
+	if loginlimit.Blocked(loginlimit.RealmMail, source, session.User) {
 		log.WithContext(session.Ctx).Debugf("POP3 authentication blocked by the failed sign-in limiter")
 		return errors2.New("password error")
 	}
@@ -143,11 +143,11 @@ func (a action) Pass(session *gopop.Session, pwd string) error {
 		session.Ctx.(*context.Context).UserAccount = user.Account
 		session.Ctx.(*context.Context).UserDomain = user.Domain
 
-		loginlimit.Success(source, session.User)
+		loginlimit.Success(loginlimit.RealmMail, source, session.User)
 		return nil
 	}
 
-	loginlimit.Failure(source, session.User)
+	loginlimit.Failure(loginlimit.RealmMail, source, session.User)
 	return errors2.New("password error")
 }
 

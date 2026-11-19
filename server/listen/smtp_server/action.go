@@ -89,7 +89,7 @@ func (s *Session) AuthPlain(username, pwd string) error {
 	// A blocked source or account gets the same reply as a wrong password,
 	// before any account lookup or password hashing happens.
 	source := loginlimit.SourceKey(s.RemoteAddress)
-	if loginlimit.Blocked(source, username) {
+	if loginlimit.Blocked(loginlimit.RealmMail, source, username) {
 		log.WithContext(s.Ctx).Debugf("SMTP authentication blocked by the failed sign-in limiter")
 		return errors.New("password error")
 	}
@@ -116,12 +116,12 @@ func (s *Session) AuthPlain(username, pwd string) error {
 		s.Ctx.UserDomain = user.Domain
 		s.Ctx.IsAdmin = user.IsAdmin == 1
 
-		loginlimit.Success(source, username)
+		loginlimit.Success(loginlimit.RealmMail, source, username)
 		log.WithContext(s.Ctx).Debugf("SMTP authentication succeeded for user %d", user.ID)
 		return nil
 	}
 
-	loginlimit.Failure(source, username)
+	loginlimit.Failure(loginlimit.RealmMail, source, username)
 	log.WithContext(s.Ctx).Debugf("SMTP authentication failed for %q", username)
 	return errors.New("password error")
 }

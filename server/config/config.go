@@ -64,11 +64,12 @@ type Config struct {
 	DomainCertificates map[string]DomainCertificate `json:"domainCertificates"`
 	// DefaultQuotaMB applies to new users; 0 means unlimited.
 	DefaultQuotaMB int `json:"defaultQuotaMB"`
-	// LimitFailedSignins bounds failed mail authentications: five failures
-	// within fifteen minutes block the source address and the account for
-	// fifteen minutes. It is a pointer so a config.json written before the
-	// setting existed (field absent) keeps the protection on; a plain bool
-	// would read the missing field as "off".
+	// LimitFailedSignins bounds failed authentications: five failures within
+	// fifteen minutes block the source address for fifteen minutes, and an
+	// account is only blocked when many distinct addresses keep failing
+	// against it. It is a pointer so a config.json written before the setting
+	// existed (field absent) keeps the protection on; a plain bool would read
+	// the missing field as "off".
 	LimitFailedSignins *bool             `json:"limitFailedSignins"`
 	Tables             map[string]string `json:"-"`
 	TablesInitData     map[string]string `json:"-"`

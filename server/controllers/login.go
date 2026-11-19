@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/noelbennettz/imail/dto/response"
 	"github.com/noelbennettz/imail/i18n"
 	"github.com/noelbennettz/imail/models"
+	"github.com/noelbennettz/imail/services/loginlimit"
 	"github.com/noelbennettz/imail/session"
 	"github.com/noelbennettz/imail/utils/array"
 	"github.com/noelbennettz/imail/utils/context"
@@ -26,13 +28,21 @@ type loginRequest struct {
 }
 
 func Login(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
+	source := loginSource(req)
+	// A blocked address is refused before anything is read from the database,
+	// with the same reply a wrong password gets.
+	if loginlimit.BlockedSource(source) {
+		log.WithContext(ctx).Debug("Web login blocked by the failed sign-in limiter")
+		response.NewErrorResponse(response.ParamsError, i18n.GetText(ctx.Lang, "aperror"), "").FPrint(w)
+		return
+	}
+
 	reqBytes, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.Errorf("%+v", err)
 	}
 	var reqData loginRequest
-	err = json.Unmarshal(reqBytes, &reqData)
-	if err != nil {
+	if err = json.Unmarshal(reqBytes, &reqData); err != nil {
 		log.Errorf("%+v", err)
 	}
 
@@ -59,6 +69,20 @@ func Login(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 	if user.ID != 0 && requestedDomain != "" && user.Domain != "" && !strings.EqualFold(user.Domain, requestedDomain) {
 		user = models.User{}
 	}
+
+	// Administrators get their own account counter, so a spray at the webmail
+	// login cannot lock the console; the address counter is shared with every
+	// plane and was already checked above.
+	realm := loginlimit.RealmWeb
+	if user.ID != 0 && user.IsAdmin == 1 {
+		realm = loginlimit.RealmAdmin
+	}
+	if loginlimit.Blocked(realm, "", account) {
+		log.WithContext(ctx).Debug("Web login blocked by the failed sign-in limiter")
+		response.NewErrorResponse(response.ParamsError, i18n.GetText(ctx.Lang, "aperror"), "").FPrint(w)
+		return
+	}
+
 	if user.ID != 0 {
 		valid, needsRehash := password.Verify(reqData.Password, user.Password)
 		if !valid {
@@ -71,6 +95,7 @@ func Login(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 	}
 
 	if user.ID != 0 {
+		loginlimit.Success(realm, source, account)
 		if err := session.Login(req.Context(), &user); err != nil {
 			log.WithContext(ctx).Errorf("Create session: %v", err)
 			response.NewErrorResponse(response.ServerError, i18n.GetText(ctx.Lang, "unknowError"), "").FPrint(w)
@@ -89,8 +114,31 @@ func Login(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 			"domains":  domains,
 		}).FPrint(w)
 	} else {
+		loginlimit.Failure(realm, source, account)
 		response.NewErrorResponse(response.ParamsError, i18n.GetText(ctx.Lang, "aperror"), "").FPrint(w)
 	}
+}
+
+// loginSource derives the limiter key of an HTTP login. The direct peer is
+// used; when a reverse proxy on this machine forwards the request (the
+// documented HTTPS-in-front setup), the client it names in X-Forwarded-For is
+// used instead. A forwarded header from a remote peer is ignored, so an
+// internet client cannot pick its own key.
+func loginSource(req *http.Request) string {
+	host, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		host = req.RemoteAddr
+	}
+	host = strings.Trim(host, "[]")
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		if forwarded := req.Header.Get("X-Forwarded-For"); forwarded != "" {
+			first := strings.TrimSpace(strings.Split(forwarded, ",")[0])
+			if client := net.ParseIP(strings.Trim(first, "[]")); client != nil {
+				return client.String()
+			}
+		}
+	}
+	return host
 }
 
 func Logout(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
