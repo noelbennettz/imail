@@ -64,7 +64,7 @@ docker compose logs -f imail
 
 Open `http://<server-ip>/` and complete the setup wizard (database,
 administrator, domains, DNS records, TLS). The first screen asks for the setup
-token: the server prints it at startup, in a banner that ends with
+token: the server prints it at startup, in a banner that contains the line
 `Read it again with: docker compose logs imail`. Copy the 24-character token
 from `docker compose logs imail` into that screen; every later wizard request
 carries it as the `X-Setup-Token` header. The token is generated only while the

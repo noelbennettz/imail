@@ -1,6 +1,5 @@
 import axios from 'axios'
 import lang from '../i18n/i18n';
-import {useGlobalStatusStore} from "@/stores/useGlobalStatusStore";
 import {router} from "@/router";
 import {getSetupToken, isSetupAPI, SETUP_TOKEN_HEADER} from "@/utils/setupToken";
 
