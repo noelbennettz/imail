@@ -743,4 +743,5 @@ Format Go code with gofumpt (`gofumpt -l -w .`). The root integration test
 starts the real SMTP, POP3 and IMAP listeners on 25, 110, 465, 587, 993 and 995
 and the HTTP listener on `setup_port`, so it needs privileges to bind the mail
 ports; package-level tests run without them. `go vet ./...` should be clean.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the patch, test and DCO sign-off rules.
 
