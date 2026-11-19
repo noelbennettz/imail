@@ -4,23 +4,27 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/noelbennettz/imail/config"
+	"github.com/noelbennettz/imail/consts"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/parsemail"
 	"github.com/noelbennettz/imail/dto/response"
 	"github.com/noelbennettz/imail/i18n"
 	"github.com/noelbennettz/imail/models"
+	"github.com/noelbennettz/imail/services/queue"
 	"github.com/noelbennettz/imail/utils/array"
 	"github.com/noelbennettz/imail/utils/async"
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/send"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
+	"xorm.io/xorm"
 )
 
 type sendRequest struct {
@@ -173,8 +177,24 @@ func Send(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 
 	}
 
+	// The message is rendered once: the stored copy and the queue rows must
+	// carry exactly the bytes that are delivered.
+	rawMIME := e.BuildBytes(ctx, true)
+	localRecipients, remoteRecipients := send.SplitRecipients(
+		append(append(append([]*parsemail.User{}, e.To...), e.Cc...), e.Bcc...),
+		config.Instance.Domains,
+	)
+	queued := len(remoteRecipients) > 0
+
+	initialStatus := int8(consts.EmailStatusSent)
+	initialError := sql.NullString{}
+	if queued {
+		initialStatus = consts.EmailStatusDeliveryPending
+		initialError = sql.NullString{String: webmailPendingError, Valid: true}
+	}
+
 	modelEmail := models.Email{
-		Type:         1,
+		Type:         consts.EmailTypeSend,
 		Subject:      e.Subject,
 		ReplyTo:      json2string(e.ReplyTo),
 		FromName:     e.From.Name,
@@ -186,20 +206,52 @@ func Send(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		Html:         sql.NullString{String: string(e.HTML), Valid: true},
 		Sender:       json2string(e.Sender),
 		Attachments:  json2string(e.Attachments),
+		RawMIME:      string(rawMIME),
 		SPFCheck:     1,
 		DKIMCheck:    1,
 		SendUserID:   ctx.UserID,
 		SendDate:     time.Now(),
 		CronSendTime: time.Now(),
-		Status:       1,
+		Status:       initialStatus,
 		CreateTime:   time.Now(),
 		MsgID:        parsemail.GenerateMsgID(config.Instance.Domain),
+		Error:        initialError,
 	}
 
-	_, err = db.Instance.Insert(&modelEmail)
-
-	if err != nil || modelEmail.Id <= 0 {
-		log.Println("insert error:", err.Error())
+	// The sent copy, its mailbox relation and the queue rows commit together,
+	// so the API only reports success once the remote copies are durable.
+	err = db.Transaction(db.Instance, func(session *xorm.Session) error {
+		if _, err := session.Insert(&modelEmail); err != nil {
+			return err
+		}
+		if modelEmail.Id <= 0 {
+			return errors.New("email insert returned no id")
+		}
+		relation := models.UserEmail{
+			UserID:  ctx.UserID,
+			EmailID: modelEmail.Id,
+			Status:  modelEmail.Status,
+			IsRead:  1,
+		}
+		if _, err := session.Insert(&relation); err != nil {
+			return err
+		}
+		if !queued {
+			return nil
+		}
+		entries, err := queue.Entries(modelEmail.Id, modelEmail.MsgID, e.From.EmailAddress, remoteRecipients, time.Now())
+		if err != nil {
+			return err
+		}
+		for i := range entries {
+			if _, err := session.Insert(&entries[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		log.WithContext(ctx).Errorf("CRITICAL audit_event=initial_persist_failed direction=webmail msg_id=%q error=%v", modelEmail.MsgID, err)
 		response.NewErrorResponse(response.ServerError, i18n.GetText(ctx.Lang, "send_fail"), err.Error()).FPrint(w)
 		return
 	}
@@ -207,43 +259,44 @@ func Send(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 	e.MessageId = cast.ToInt64(modelEmail.Id)
 	e.MsgID = modelEmail.MsgID
 
-	async.New(ctx).Process(func(p any) {
-		errMsg := ""
-		err, _ := send.Send(ctx, e)
+	log.WithContext(ctx).Infof("Webmail message %d queued for %d remote recipient(s)", modelEmail.Id, len(remoteRecipients))
 
-		if err != nil {
-			errMsg = err.Error()
-			_, err := db.Instance.Exec(db.WithContext(ctx, "update email set status =2 ,error=? where id = ? "), errMsg, modelEmail.Id)
-			if err != nil {
+	if len(localRecipients) > 0 {
+		// Local mailboxes are still handed over inline, after the commit. When a
+		// remote copy is queued the final status belongs to the worker.
+		async.New(ctx).Process(func(p any) {
+			deliveryErr, _ := send.SendTo(ctx, e, localRecipients)
+			if queued {
+				if deliveryErr != nil {
+					log.WithContext(ctx).Warnf("Inline delivery to local recipients failed after the message was queued: %v", deliveryErr)
+					if _, err := db.Instance.Exec(db.WithContext(ctx, "update email set error=? where id=?"), webmailPendingError+": "+deliveryErr.Error(), modelEmail.Id); err != nil {
+						log.WithContext(ctx).Errorf("sql Error :%+v", err)
+					}
+				}
+				return
+			}
+
+			targetStatus := int8(consts.EmailStatusSent)
+			var errorText any
+			if deliveryErr != nil {
+				targetStatus = consts.EmailStatusFail
+				errorText = deliveryErr.Error()
+			}
+			if _, err := db.Instance.Exec(db.WithContext(ctx, "update email set status=?, error=? where id=?"), targetStatus, errorText, modelEmail.Id); err != nil {
 				log.WithContext(ctx).Errorf("sql Error :%+v", err)
 			}
-
-			ue := models.UserEmail{
-				UserID:  ctx.UserID,
-				EmailID: modelEmail.Id,
-				Status:  2,
-				IsRead:  1,
-			}
-			db.Instance.Insert(&ue)
-
-		} else {
-			_, err := db.Instance.Exec(db.WithContext(ctx, "update email set status =1  where id = ? "), modelEmail.Id)
-			if err != nil {
+			if _, err := db.Instance.Exec(db.WithContext(ctx, "update user_email set status=? where email_id=?"), targetStatus, modelEmail.Id); err != nil {
 				log.WithContext(ctx).Errorf("sql Error :%+v", err)
 			}
-
-			ue := models.UserEmail{
-				UserID:  ctx.UserID,
-				EmailID: modelEmail.Id,
-				Status:  1,
-				IsRead:  1,
-			}
-			db.Instance.Insert(&ue)
-		}
-	}, nil)
+		}, nil)
+	}
 
 	response.NewSuccessResponse(i18n.GetText(ctx.Lang, "succ")).FPrint(w)
 }
+
+// webmailPendingError marks a composed message that is waiting in the outbound
+// queue, so the sent folder shows why it is not marked sent yet.
+const webmailPendingError = "waiting for delivery to other servers"
 
 func json2string(d any) string {
 	by, _ := json.Marshal(d)

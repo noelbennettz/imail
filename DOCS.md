@@ -287,11 +287,15 @@ unless you fully understand the exposure.
 
 ## Delivery and retries
 
-iMail keeps a durable outbound queue for mail addressed to other domains. The
-submitting client is told the message was accepted (`250`) once the message and
-its queue row are committed, and a background worker delivers it from then on.
-Messages to mailboxes this server hosts are still delivered inline, inside the
-same SMTP transaction, as before.
+iMail keeps a durable outbound queue for mail addressed to other domains, for
+both submission paths: an SMTP client and the webmail compose window. The
+message is accepted (`250`, or a successful API response) once the message and
+its queue rows are committed, and a background worker delivers it from then on.
+Messages to mailboxes this server hosts are still delivered inline.
+
+One queue row is written per remote **domain**, not per message. A domain that
+accepted the message is never contacted again while another domain is still
+being retried.
 
 - **Durability**: the body is written to the database before `DATA` is
   acknowledged. The message row and the queue row commit in one transaction, so
@@ -305,12 +309,12 @@ same SMTP transaction, as before.
   1 minute, 5 minutes, 15 minutes, 1 hour, 6 hours and then every 24 hours. An
   entry is given up when the next attempt would fall outside 72 hours from
   acceptance. A permanent 5xx reply fails the entry immediately.
-- **Status**: the sent-folder row stays *delivery pending* while the queue entry
-  is waiting, and becomes *sent* or *failed* (with the last error) when the
-  worker finishes. Every attempt is logged with the queue id, the message id and
-  the recipients.
+- **Status**: the sent-folder row stays *delivery pending* while any queue row is
+  waiting, becomes *sent* when every remote domain accepted the message, and
+  *failed* (with the last error) when a domain finally gave up. Every attempt is
+  logged with the queue id, the message id and the recipients.
 - **Outbox panel**: the Security page under Administration shows the number of
-  waiting and finally failed outbound messages, read-only.
+  waiting and finally failed queue rows — one per remote domain — read-only.
 - **Restart**: pending entries are stored in the database and the worker claims
   them again at startup, so a restart resumes delivery without any action. A row
   that was being delivered when the process stopped is retried after its lease
@@ -321,6 +325,12 @@ same SMTP transaction, as before.
 - **If a local recipient copy fails** while a remote copy is queued, the SMTP
   client already has its `250`: the inline failure is recorded on the sent copy
   and the queued copies are still delivered.
+- **Retry granularity is the domain**: if one recipient at a domain is accepted
+  and another is rejected inside the same transaction, the retry can deliver the
+  message twice to the recipient that was already accepted. Per-recipient state
+  would be needed to avoid that, which this queue does not keep.
+- **Rule-based forwarding** (a rule that forwards incoming mail) is unchanged and
+  still synchronous.
 - **No bounce is generated**: a permanently rejected message is marked failed in
   the sent folder and logged; it is not mailed back to the local sender.
 - **Storage**: the `email_queue` table keeps delivered and failed rows as a

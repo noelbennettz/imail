@@ -202,3 +202,32 @@ func TestOutboundRemoteOnlyMessageIsQueuedWithoutInlineDelivery(t *testing.T) {
 		t.Fatalf("email status = %d, want pending until the worker delivers", stored.Status)
 	}
 }
+
+func TestOutboundQueueRowPerRemoteDomain(t *testing.T) {
+	engine, _ := newQueueTestEngine(t)
+	session := newAuditTestSession()
+	session.RawEmailData = []byte("From: sender@example.com\r\n\r\nbody\r\n")
+	err := session.deliverOutgoingEmail(newQueueTestEmail("a@one.example", "b@two.example", "c@one.example"),
+		func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error) {
+			t.Error("no inline delivery is expected for remote-only recipients")
+			return nil, nil
+		})
+	if err != nil {
+		t.Fatalf("deliverOutgoingEmail() = %v", err)
+	}
+	rows := queueRows(t, engine)
+	if len(rows) != 2 {
+		t.Fatalf("queue rows = %d, want one per remote domain", len(rows))
+	}
+	seen := map[string][]string{}
+	for _, row := range rows {
+		recipients, err := queue.Recipients(&row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen[row.MsgID+"/"+recipients[0]] = recipients
+	}
+	if len(seen) != 2 {
+		t.Fatalf("queue rows = %+v, want two distinct domains", seen)
+	}
+}

@@ -104,6 +104,38 @@ func Deliver(ctx *context.Context, from string, recipients []string, data []byte
 	return doSend(ctx, fromDomain, data, to, from)
 }
 
+// SplitRecipients separates message recipients into mailboxes this server hosts
+// (delivered inline) and remote addresses (queued, one queue row per domain).
+func SplitRecipients(recipients []*parsemail.User, domains []string) (local []*parsemail.User, remote []string) {
+	localDomains := make(map[string]struct{}, len(domains))
+	for _, domain := range domains {
+		localDomains[strings.ToLower(strings.TrimSpace(domain))] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(recipients))
+	for _, user := range recipients {
+		if user == nil {
+			continue
+		}
+		address := strings.TrimSpace(user.EmailAddress)
+		if address == "" {
+			continue
+		}
+		key := strings.ToLower(address)
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
+		if _, domain, found := strings.Cut(key, "@"); found {
+			if _, isLocal := localDomains[domain]; isLocal {
+				local = append(local, user)
+				continue
+			}
+		}
+		remote = append(remote, address)
+	}
+	return local, remote
+}
+
 // IsPermanentSMTPResponse reports whether err is a 5xx reply from the remote
 // server. Retrying such a delivery cannot succeed, so the queue fails it
 // immediately.

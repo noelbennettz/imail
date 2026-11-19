@@ -348,3 +348,107 @@ func TestWorkerDeliversOverLoopbackSMTP(t *testing.T) {
 		t.Fatalf("email status = %d, want sent", status)
 	}
 }
+
+// TestRetryOnlyContactsTheOutstandingDomain proves that a domain which already
+// accepted the message is not contacted again when another domain is retried.
+func TestRetryOnlyContactsTheOutstandingDomain(t *testing.T) {
+	engine, _ := newTestEngine(t)
+	email := insertEmail(t, engine, "per-domain@example.com")
+	now := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
+
+	entries, err := Entries(email.Id, email.MsgID, email.FromAddress,
+		[]string{"accepted@one.example", "retry@two.example"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range entries {
+		if _, err := engine.Insert(&entries[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var mu sync.Mutex
+	var contacted []string
+	worker := newTestWorker(func() time.Time { return now })
+	worker.deliver = func(_ *context.Context, entry *models.EmailQueue, _ *models.Email) (error, map[string]error) {
+		recipients, err := Recipients(entry)
+		if err != nil {
+			return err, nil
+		}
+		mu.Lock()
+		contacted = append(contacted, recipients...)
+		mu.Unlock()
+		if strings.HasSuffix(recipients[0], "@two.example") {
+			return temporaryFailure()
+		}
+		return nil, nil
+	}
+
+	if processed := worker.Drain(); processed != 2 {
+		t.Fatalf("first Drain() = %d, want both domains", processed)
+	}
+	// Two rows: one delivered, one waiting. The email is not final yet.
+	if pending, failed, err := Counts(); err != nil || pending != 1 || failed != 0 {
+		t.Fatalf("Counts() = %d/%d (%v), want one waiting row", pending, failed, err)
+	}
+	if status := loadEmail(t, engine, email.Id).Status; status != consts.EmailStatusDeliveryPending {
+		t.Fatalf("email status = %d, want pending while one domain waits", status)
+	}
+
+	// The retry may only contact the domain that failed.
+	contacted = nil
+	now = now.Add(time.Minute)
+	worker.deliver = func(_ *context.Context, entry *models.EmailQueue, _ *models.Email) (error, map[string]error) {
+		recipients, err := Recipients(entry)
+		if err != nil {
+			return err, nil
+		}
+		mu.Lock()
+		contacted = append(contacted, recipients...)
+		mu.Unlock()
+		return nil, nil
+	}
+	if processed := worker.Drain(); processed != 1 {
+		t.Fatalf("retry Drain() = %d, want only the outstanding domain", processed)
+	}
+	if len(contacted) != 1 || contacted[0] != "retry@two.example" {
+		t.Fatalf("retry contacted %v, want only retry@two.example", contacted)
+	}
+	if status := loadEmail(t, engine, email.Id).Status; status != consts.EmailStatusSent {
+		t.Fatalf("email status = %d, want sent once every domain finished", status)
+	}
+}
+
+// TestFinalStatusWaitsForEveryDomain checks the aggregate status rules.
+func TestFinalStatusWaitsForEveryDomain(t *testing.T) {
+	engine, _ := newTestEngine(t)
+	email := insertEmail(t, engine, "aggregate@example.com")
+	now := time.Now()
+	entries, err := Entries(email.Id, email.MsgID, email.FromAddress,
+		[]string{"one@one.example", "two@two.example"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range entries {
+		if _, err := engine.Insert(&entries[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := MarkDelivered(&context.Context{}, &entries[0], now); err != nil {
+		t.Fatal(err)
+	}
+	if status := loadEmail(t, engine, email.Id).Status; status != consts.EmailStatusDeliveryPending {
+		t.Fatalf("status after one domain = %d, want pending", status)
+	}
+	if err := MarkFailed(&context.Context{}, &entries[1], "550 mailbox unavailable", now); err != nil {
+		t.Fatal(err)
+	}
+	stored := loadEmail(t, engine, email.Id)
+	if stored.Status != consts.EmailStatusFail {
+		t.Fatalf("status after a failed domain = %d, want failed", stored.Status)
+	}
+	if !strings.Contains(stored.Error.String, "550") {
+		t.Fatalf("error = %q, want the failing domain reason", stored.Error.String)
+	}
+}

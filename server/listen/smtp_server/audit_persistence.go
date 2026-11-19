@@ -17,6 +17,7 @@ import (
 	"github.com/noelbennettz/imail/services/queue"
 	"github.com/noelbennettz/imail/utils/array"
 	"github.com/noelbennettz/imail/utils/context"
+	"github.com/noelbennettz/imail/utils/send"
 	log "github.com/sirupsen/logrus"
 	"xorm.io/builder"
 	"xorm.io/xorm"
@@ -43,23 +44,12 @@ type outboundPlan struct {
 // splitOutboundRecipients separates the recipients of a message into mailboxes
 // this server hosts and addresses another server has to accept.
 func splitOutboundRecipients(email *parsemail.Email) outboundPlan {
-	var addresses []string
-	byAddress := make(map[string]*parsemail.User)
-	for _, recipients := range [][]*parsemail.User{email.To, email.Cc, email.Bcc} {
-		for _, user := range recipients {
-			if user == nil || strings.TrimSpace(user.EmailAddress) == "" {
-				continue
-			}
-			addresses = append(addresses, user.EmailAddress)
-			byAddress[strings.ToLower(strings.TrimSpace(user.EmailAddress))] = user
-		}
+	var recipients []*parsemail.User
+	for _, list := range [][]*parsemail.User{email.To, email.Cc, email.Bcc} {
+		recipients = append(recipients, list...)
 	}
-	localAddresses, remote := queue.SplitRecipients(addresses, config.Instance.Domains)
-	plan := outboundPlan{remote: remote}
-	for _, address := range localAddresses {
-		plan.local = append(plan.local, byAddress[strings.ToLower(strings.TrimSpace(address))])
-	}
-	return plan
+	local, remote := send.SplitRecipients(recipients, config.Instance.Domains)
+	return outboundPlan{local: local, remote: remote}
 }
 
 func (s *Session) deliverOutgoingEmail(email *parsemail.Email, sender outgoingSender) error {
@@ -189,12 +179,16 @@ func persistInitialAudit(ctx *context.Context, modelEmail models.Email, userIDs 
 		// The queue row commits with the message, so an accepted message is
 		// never lost between the audit insert and the enqueue.
 		if enqueue != nil && len(enqueue.Recipients) > 0 {
-			entry, err := queue.Entry(candidate.Id, candidate.MsgID, enqueue.EnvelopeFrom, enqueue.Recipients, time.Now())
+			// One row per remote domain: a domain that accepts the message is
+			// never contacted again while another domain retries.
+			entries, err := queue.Entries(candidate.Id, candidate.MsgID, enqueue.EnvelopeFrom, enqueue.Recipients, time.Now())
 			if err != nil {
 				return err
 			}
-			if _, err := session.Insert(&entry); err != nil {
-				return err
+			for i := range entries {
+				if _, err := session.Insert(&entries[i]); err != nil {
+					return err
+				}
 			}
 		}
 		saved = candidate

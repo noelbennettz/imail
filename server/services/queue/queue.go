@@ -15,6 +15,7 @@ package queue
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -112,34 +113,38 @@ func Recipients(entry *models.EmailQueue) ([]string, error) {
 	return recipients, nil
 }
 
-// SplitRecipients separates addresses into those of a configured (local) domain
-// and everything else. Addresses are kept as given.
-func SplitRecipients(addresses []string, domains []string) (local, remote []string) {
-	localDomains := make(map[string]struct{}, len(domains))
-	for _, domain := range domains {
-		localDomains[strings.ToLower(strings.TrimSpace(domain))] = struct{}{}
-	}
-	seen := make(map[string]struct{}, len(addresses))
-	for _, address := range addresses {
+// Entries builds one queue row per remote recipient domain. Retrying per domain
+// is what keeps a domain that already accepted the message from receiving it
+// again when another domain is still failing.
+func Entries(emailID int, msgID, envelopeFrom string, recipients []string, now time.Time) ([]models.EmailQueue, error) {
+	byDomain := make(map[string][]string)
+	var domains []string
+	for _, address := range recipients {
 		address = strings.TrimSpace(address)
 		if address == "" {
 			continue
 		}
-		key := strings.ToLower(address)
-		if _, duplicate := seen[key]; duplicate {
-			continue
+		_, domain, found := strings.Cut(strings.ToLower(address), "@")
+		if !found {
+			// Addresses without a domain cannot be grouped; they get their own
+			// row so the failure is visible instead of being dropped.
+			domain = address
 		}
-		seen[key] = struct{}{}
-		_, domain, found := strings.Cut(key, "@")
-		if found {
-			if _, isLocal := localDomains[domain]; isLocal {
-				local = append(local, address)
-				continue
-			}
+		if _, seen := byDomain[domain]; !seen {
+			domains = append(domains, domain)
 		}
-		remote = append(remote, address)
+		byDomain[domain] = append(byDomain[domain], address)
 	}
-	return local, remote
+	sort.Strings(domains)
+	entries := make([]models.EmailQueue, 0, len(domains))
+	for _, domain := range domains {
+		entry, err := Entry(emailID, msgID, envelopeFrom, byDomain[domain], now)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
 }
 
 // Claim leases one due entry, or returns nil when nothing is due. The lease and
@@ -197,7 +202,7 @@ func MarkDelivered(ctx *context.Context, entry *models.EmailQueue, now time.Time
 		}); err != nil {
 			return err
 		}
-		return setEmailResult(session, entry.EmailID, consts.EmailStatusSent, nil)
+		return finalizeEmail(session, entry.EmailID)
 	})
 }
 
@@ -215,7 +220,7 @@ func MarkFailed(ctx *context.Context, entry *models.EmailQueue, reason string, n
 		}); err != nil {
 			return err
 		}
-		return setEmailResult(session, entry.EmailID, consts.EmailStatusFail, reason)
+		return finalizeEmail(session, entry.EmailID)
 	})
 }
 
@@ -282,6 +287,37 @@ func setEmailResult(session *xorm.Session, emailID int, status int8, errorText a
 		return err
 	}
 	return nil
+}
+
+// finalizeEmail writes the aggregate result once no queue row of the email is
+// outstanding any more. One remote domain per row means a domain that accepted
+// the message is never contacted again while another domain is still retrying.
+func finalizeEmail(session *xorm.Session, emailID int) error {
+	outstanding, err := session.Table(&models.EmailQueue{}).
+		Where("email_id = ? and state in (?, ?)", emailID, models.EmailQueuePending, models.EmailQueueDelivering).
+		Count()
+	if err != nil {
+		return err
+	}
+	if outstanding > 0 {
+		return nil
+	}
+
+	var failed models.EmailQueue
+	found, err := session.Table(&models.EmailQueue{}).
+		Where("email_id = ? and state = ?", emailID, models.EmailQueueFailed).
+		Desc("id").Limit(1).Get(&failed)
+	if err != nil {
+		return err
+	}
+	if found {
+		reason := LastError(&failed)
+		if reason == "" {
+			reason = "delivery to a remote domain failed"
+		}
+		return setEmailResult(session, emailID, consts.EmailStatusFail, reason)
+	}
+	return setEmailResult(session, emailID, consts.EmailStatusSent, nil)
 }
 
 // LastError renders the stored error text for logs.
