@@ -32,10 +32,32 @@ func Encode(password string) string {
 		base64.RawStdEncoding.EncodeToString(derived)
 }
 
+// VerifyConcurrency bounds how many PBKDF2 verifications run at the same time.
+// A distributed sign-in spray can keep trying for ever, but it can only delay a
+// correct login: it cannot make the process hash an unbounded number of
+// passwords at once, which is what keeps the CPU (and every listener) alive.
+const VerifyConcurrency = 4
+
+// verifySlots is the semaphore. It is held for the duration of the expensive
+// PBKDF2 derivation and released before Verify returns.
+var verifySlots = make(chan struct{}, VerifyConcurrency)
+
+// derive is pbkdf2Key, except in tests that instrument the concurrency.
+var derive = pbkdf2Key
+
 // Verify checks a password against a stored PBKDF2 hash or a legacy MD5 hash.
 // The second return value is true when the stored hash should be replaced with
 // a PBKDF2 hash after a successful login.
+//
+// Verification waits for one of VerifyConcurrency slots. Waiting is the only
+// effect of a flood: the result is never changed by it.
 func Verify(password, stored string) (bool, bool) {
+	verifySlots <- struct{}{}
+	defer func() { <-verifySlots }()
+	return verify(password, stored)
+}
+
+func verify(password, stored string) (bool, bool) {
 	if strings.HasPrefix(stored, pbkdf2Prefix+"$") {
 		parts := strings.Split(stored, "$")
 		if len(parts) != 4 {
@@ -53,7 +75,7 @@ func Verify(password, stored string) (bool, bool) {
 		if err != nil || len(want) == 0 {
 			return false, false
 		}
-		got := pbkdf2Key([]byte(password), salt, iterations, len(want))
+		got := derive([]byte(password), salt, iterations, len(want))
 		return subtle.ConstantTimeCompare(got, want) == 1, false
 	}
 

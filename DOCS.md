@@ -391,9 +391,13 @@ settings icon. The page is split into personal settings and administration.
   characters.
 - **Security** — the server-wide protection switch. “Limit failed sign-ins” is
   on by default: five failed SMTP, IMAP or POP3 sign-ins within fifteen minutes
-  refuse further attempts from the same source address and for the same account
-  for fifteen minutes. The switch is applied immediately, without a restart,
-  and is saved in `config.json`. The same page shows the **outbox**: how many
+  refuse further attempts from the same source address for fifteen minutes.
+  Accounts are a second, deliberately weaker control: a mailbox is only blocked
+  when failures keep coming from several addresses (25 failures from at least
+  three distinct sources within fifteen minutes), so one attacker cannot lock
+  the owner out. The webmail and administrator logins are limited the same way.
+  The switch is applied immediately, without a restart, and is saved in
+  `config.json`. The same page shows the **outbox**: how many
   outbound messages are waiting for delivery to other servers and how many have
   finally failed. It is read-only; the queue drains itself.
 - **Domains** — add or remove configured domains. A domain with users cannot be
@@ -647,16 +651,30 @@ scope is in [SECURITY.md](SECURITY.md). The list below is what the code does.
   iterations). Password changes revoke existing sessions. Minimum length is 8
   characters.
 - Failed sign-ins are limited while `limitFailedSignins` is on (the default,
-  including for `config.json` files written before the setting existed). Five
-  failures within fifteen minutes block the source address and the account for
-  fifteen minutes in SMTP AUTH, IMAP and POP3. A blocked attempt gets the
-  protocol's ordinary authentication failure (`535`, `NO [AUTHENTICATIONFAILED]`,
-  `-ERR`), so a block never tells an attacker whether the account exists, and the
-  check runs before the password hash is computed. A server-wide ceiling of 100
-  failures per minute bounds the hashing a spray from many addresses can cause,
-  and the in-memory table is capped at 4096 keys. Counters are not persisted:
-  restarting the server clears them. Administrators can turn the switch off on
-  the Security page; it applies immediately.
+  including for `config.json` files written before the setting existed). The
+  source address is the primary control: five failures within fifteen minutes
+  block that address for fifteen minutes in SMTP AUTH, IMAP, POP3 and the
+  `/api/login` used by webmail and the administrator console. A blocked attempt
+  gets the protocol's ordinary authentication failure (`535`,
+  `NO [AUTHENTICATIONFAILED]`, `-ERR`, a generic `400` for the web login), so a
+  block never tells an attacker whether the account exists, and the check runs
+  before the password hash is computed. The address counter is shared by every
+  protocol, so switching protocol does not reset a block.
+- Accounts are a second, weaker control against a slow distributed guess: a
+  mailbox is blocked for fifteen minutes only after 25 failures within fifteen
+  minutes that came from at least three distinct addresses. One source alone can
+  therefore never lock an account out. Account counters are separate for mail,
+  webmail and the administrator console, so a spray at a user mailbox cannot
+  block an administrator's login.
+- There is deliberately no server-wide ceiling that refuses attempts: a
+  distributed spray must not be able to shut legitimate logins out. Password
+  hashing is bounded instead — at most four PBKDF2 verifications run at the same
+  time, so a spray can delay a correct login but never make it fail. Failures are
+  counted globally and produce one warning line per minute when 100 are reached;
+  that counter is for alerting only and never blocks anyone. The in-memory table
+  is capped at 4096 keys. Counters are not persisted: restarting the server
+  clears them. Administrators can turn the switch off on the Security page; it
+  applies immediately.
 - Multi-domain deployments require a full `account@domain` login for web,
   SMTP, IMAP and POP3. The account namespace is global: `account` is a unique
   column, so duplicate local parts across domains are not possible.

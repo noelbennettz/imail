@@ -178,3 +178,40 @@ func TestSMTPLimiterCanBeSwitchedOff(t *testing.T) {
 		t.Fatalf("login with the switch off failed: %v", err)
 	}
 }
+
+// TestSMTPCorrectLoginSurvivesADistributedSpray is the denial-of-service
+// regression test: a hundred failures from a hundred sources must not stop the
+// legitimate owner of a mailbox from logging in.
+func TestSMTPCorrectLoginSurvivesADistributedSpray(t *testing.T) {
+	engine, _ := newAuditTestEngine(t)
+	installLimiter(t)
+	if _, err := engine.Insert(&models.User{
+		Account:  "spray-target",
+		Password: password.Encode("correct-horse"),
+		Domain:   "example.com",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 100; i++ {
+		session := &Session{
+			RemoteAddress: &net.TCPAddr{IP: net.ParseIP(fmt.Sprintf("198.51.100.%d", i+1)), Port: 2500},
+			Ctx:           &context.Context{},
+		}
+		account := fmt.Sprintf("user%d", i)
+		if err := session.AuthPlain(account, "wrong-password"); err == nil {
+			t.Fatalf("spray attempt %d succeeded", i)
+		}
+	}
+
+	session := &Session{
+		RemoteAddress: &net.TCPAddr{IP: net.ParseIP("203.0.113.60"), Port: 2525},
+		Ctx:           &context.Context{},
+	}
+	if err := session.AuthPlain("spray-target", "correct-horse"); err != nil {
+		t.Fatalf("correct login refused after a distributed spray: %v", err)
+	}
+	if session.Ctx.UserAccount != "spray-target" {
+		t.Fatal("the session was not authenticated")
+	}
+}

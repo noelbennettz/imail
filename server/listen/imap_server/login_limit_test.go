@@ -123,21 +123,20 @@ func TestIMAPBlockedLoginSkipsDatabase(t *testing.T) {
 	}
 }
 
-func TestIMAPBlockedAccountFromAnotherAddress(t *testing.T) {
+func TestIMAPOneSourceCannotLockAnAccount(t *testing.T) {
 	installLimiter(t)
-	first := &serverSession{server: NewServer(), ctx: &pcontext.Context{}, remoteAddr: "192.0.2.41"}
+	attacker := &serverSession{server: NewServer(), ctx: &pcontext.Context{}, remoteAddr: "192.0.2.41"}
 	for i := 0; i < 5; i++ {
-		_ = first.Login("testCase", "wrong-password")
+		_ = attacker.Login("testCase", "wrong-password")
 	}
 
-	// A different address still cannot log in to the blocked account.
+	// The attacker's own address is blocked, but the account is not: the owner
+	// must still be able to log in from another address.
 	second := &serverSession{server: NewServer(), ctx: &pcontext.Context{}, remoteAddr: "192.0.2.42"}
-	err := second.Login("testCase", "testCase")
-	if err == nil {
-		t.Fatal("a blocked account accepted a login from another address")
+	if err := second.Login("testCase", "testCase"); err != nil {
+		t.Fatalf("one source locked the account out: %v", err)
 	}
-	var imapErr *imap.Error
-	if !errors.As(err, &imapErr) || imapErr.Code != imap.ResponseCodeAuthenticationFailed {
-		t.Fatalf("blocked login error = %v, want the ordinary authentication failure", err)
+	if second.status != AUTHORIZED || second.ctx.UserID == 0 {
+		t.Fatal("the owner could not authenticate after a one-source attack")
 	}
 }

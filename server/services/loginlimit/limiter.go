@@ -1,14 +1,23 @@
 // Package loginlimit bounds failed mail-authentication attempts.
 //
-// The listeners share one in-memory limiter. A key is the source address of the
-// connection or the account being tried; after MaxFailures failures inside
-// FailureWindow the key is refused for BlockDuration. Every refusal is reported
-// to the client as the protocol's ordinary authentication failure, so a blocked
-// reply never says whether the account exists. A global ceiling stops a
-// distributed spray from turning into unlimited password hashing, and the key
-// map is bounded so a spray cannot grow it without limit.
+// The listeners share one in-memory limiter. The primary control is the source
+// address: after SourceMaxFailures failures inside SourceWindow the address is
+// refused for SourceBlock, whatever account it tries. Accounts are a secondary
+// control and are deliberately harder to block: an account is only blocked when
+// AccountMaxFailures failures inside AccountWindow come from at least
+// AccountMinSources distinct addresses. One source can therefore never lock an
+// account out on its own, which keeps a targeted lockout from being a cheap
+// denial of service.
 //
-// Nothing here is persisted: a restart forgets the counters, which is
+// There is no global ceiling that refuses attempts. A distributed spray is
+// allowed to keep trying, but the password work is bounded by a semaphore
+// around the PBKDF2 verification, so a correct login is only delayed, never
+// refused, by a spray. The global failure counter feeds logging and alerting
+// only.
+//
+// Every refusal is reported to the client as the protocol's ordinary
+// authentication failure, so a blocked reply never says whether the account
+// exists. Nothing here is persisted: a restart forgets the counters, which is
 // documented for administrators.
 package loginlimit
 
@@ -19,86 +28,149 @@ import (
 	"time"
 
 	"github.com/noelbennettz/imail/config"
+	log "github.com/sirupsen/logrus"
+)
+
+// Realm namespaces the per-account counters. The per-source counter is shared by
+// every realm, so one address cannot dodge a block by switching from SMTP to
+// webmail; account failures do not leak across planes, so a spray at the
+// webmail login cannot lock an administrator's console login.
+type Realm string
+
+const (
+	// RealmMail covers SMTP, IMAP and POP3 authentication.
+	RealmMail Realm = "mail"
+	// RealmWeb covers the user webmail login.
+	RealmWeb Realm = "web"
+	// RealmAdmin covers the administrator console login.
+	RealmAdmin Realm = "admin"
 )
 
 // Options configures a Limiter. Zero values are replaced by DefaultOptions.
 type Options struct {
-	// MaxFailures is the number of failures within FailureWindow that blocks
-	// a key.
-	MaxFailures int
-	// FailureWindow is how far back failures are counted.
-	FailureWindow time.Duration
-	// BlockDuration is how long a key stays blocked once it reaches
-	// MaxFailures.
-	BlockDuration time.Duration
+	// SourceMaxFailures is the number of failures within SourceWindow that
+	// blocks a source address.
+	SourceMaxFailures int
+	// SourceWindow is how far back source failures are counted.
+	SourceWindow time.Duration
+	// SourceBlock is how long a source address stays blocked.
+	SourceBlock time.Duration
+	// AccountMaxFailures is the number of failures within AccountWindow that,
+	// together with AccountMinSources distinct sources, blocks an account.
+	AccountMaxFailures int
+	// AccountWindow is how far back account failures are counted.
+	AccountWindow time.Duration
+	// AccountBlock is how long a blocked account stays blocked.
+	AccountBlock time.Duration
+	// AccountMinSources is the number of distinct source addresses that must
+	// have contributed before an account can be blocked at all. It must be at
+	// least 2; one source alone never locks an account.
+	AccountMinSources int
 	// MaxKeys bounds the number of tracked keys.
 	MaxKeys int
-	// GlobalMaxFailures is the ceiling of failures, over all keys, inside
-	// GlobalWindow. Reaching it refuses every attempt until the window moves
-	// on, which bounds the password hashing a spray can cause.
-	GlobalMaxFailures int
-	GlobalWindow      time.Duration
+	// AlertFailures is the failure count inside AlertWindow that triggers
+	// OnAlert. Reaching it never refuses an attempt: the counter exists for
+	// logging and alerting only.
+	AlertFailures int
+	AlertWindow   time.Duration
+	// OnAlert is called outside the limiter lock when AlertFailures failures
+	// happened inside AlertWindow. It fires at most once per window.
+	OnAlert func(failures int, window time.Duration)
 	// Now supplies the clock; tests replace it.
 	Now func() time.Time
 }
 
-// DefaultOptions is the policy the mail listeners use: 5 failures in 15
-// minutes block for 15 minutes, at most 100 failures a minute in total, and at
-// most 4096 keys are remembered.
+// DefaultOptions is the policy the mail listeners and the web login use: 5
+// failures in 15 minutes block a source for 15 minutes; an account needs 25
+// failures from at least 3 distinct sources inside 15 minutes before it is
+// blocked for 15 minutes; at most 4096 keys are remembered; 100 failures a
+// minute produce one alert line.
 var DefaultOptions = Options{
-	MaxFailures:       5,
-	FailureWindow:     15 * time.Minute,
-	BlockDuration:     15 * time.Minute,
-	MaxKeys:           4096,
-	GlobalMaxFailures: 100,
-	GlobalWindow:      time.Minute,
+	SourceMaxFailures:  5,
+	SourceWindow:       15 * time.Minute,
+	SourceBlock:        15 * time.Minute,
+	AccountMaxFailures: 25,
+	AccountWindow:      15 * time.Minute,
+	AccountBlock:       15 * time.Minute,
+	AccountMinSources:  3,
+	MaxKeys:            4096,
+	AlertFailures:      100,
+	AlertWindow:        time.Minute,
 }
 
-// Default is the limiter shared by the SMTP, IMAP and POP3 listeners. Tests
-// replace it with a limiter that uses a fake clock.
+// Default is the limiter shared by the SMTP, IMAP, POP3 and HTTP listeners.
+// Tests replace it with a limiter that uses a fake clock.
 var Default = New(DefaultOptions)
 
 const (
 	addressPrefix = "ip:"
-	accountPrefix = "acct:"
+	accountSuffix = ":acct:"
 )
 
-type entry struct {
-	failures     []time.Time
-	blockedUntil time.Time
-	lastSeen     time.Time
+// failure is one failed attempt against an account, tagged with the source
+// address it came from so the distinct-source rule can be evaluated.
+type failure struct {
+	at     time.Time
+	source string
 }
 
-// Limiter counts failures per source address and per account.
+type entry struct {
+	// sourceFailures holds the timestamps of an address key.
+	sourceFailures []time.Time
+	// accountFailures holds the tagged failures of an account key.
+	accountFailures []failure
+	blockedUntil    time.Time
+	lastSeen        time.Time
+}
+
+// Limiter counts failures per source address and, more conservatively, per
+// account.
 type Limiter struct {
 	mu      sync.Mutex
 	opts    Options
 	entries map[string]*entry
 	// global holds the failure timestamps of the whole server, newest last.
-	global []time.Time
+	// They feed logging and alerting; they never refuse an attempt.
+	global      []time.Time
+	lastAlertAt time.Time
 }
 
 // New builds a limiter. Fields left at their zero value fall back to
 // DefaultOptions.
 func New(opts Options) *Limiter {
 	defaults := DefaultOptions
-	if opts.MaxFailures <= 0 {
-		opts.MaxFailures = defaults.MaxFailures
+	if opts.SourceMaxFailures <= 0 {
+		opts.SourceMaxFailures = defaults.SourceMaxFailures
 	}
-	if opts.FailureWindow <= 0 {
-		opts.FailureWindow = defaults.FailureWindow
+	if opts.SourceWindow <= 0 {
+		opts.SourceWindow = defaults.SourceWindow
 	}
-	if opts.BlockDuration <= 0 {
-		opts.BlockDuration = defaults.BlockDuration
+	if opts.SourceBlock <= 0 {
+		opts.SourceBlock = defaults.SourceBlock
+	}
+	if opts.AccountMaxFailures <= 0 {
+		opts.AccountMaxFailures = defaults.AccountMaxFailures
+	}
+	if opts.AccountWindow <= 0 {
+		opts.AccountWindow = defaults.AccountWindow
+	}
+	if opts.AccountBlock <= 0 {
+		opts.AccountBlock = defaults.AccountBlock
+	}
+	if opts.AccountMinSources < 2 {
+		opts.AccountMinSources = defaults.AccountMinSources
 	}
 	if opts.MaxKeys <= 0 {
 		opts.MaxKeys = defaults.MaxKeys
 	}
-	if opts.GlobalMaxFailures <= 0 {
-		opts.GlobalMaxFailures = defaults.GlobalMaxFailures
+	if opts.AlertFailures <= 0 {
+		opts.AlertFailures = defaults.AlertFailures
 	}
-	if opts.GlobalWindow <= 0 {
-		opts.GlobalWindow = defaults.GlobalWindow
+	if opts.AlertWindow <= 0 {
+		opts.AlertWindow = defaults.AlertWindow
+	}
+	if opts.OnAlert == nil {
+		opts.OnAlert = LogAlert
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
@@ -109,47 +181,74 @@ func New(opts Options) *Limiter {
 	}
 }
 
+// LogAlert is the production alert sink: one warning line per window.
+func LogAlert(failures int, window time.Duration) {
+	log.Warnf("Failed sign-in alert: %d failures in %s across many sources; password checks stay bounded and per-source blocking stays active", failures, window)
+}
+
 // Blocked reports whether an attempt for source and account must be refused
-// before any password work happens. Either argument may be empty; empty keys
-// are simply not tracked.
-func (l *Limiter) Blocked(source, account string) bool {
+// before any password work happens. Either argument may be empty; empty keys are
+// simply not tracked.
+func (l *Limiter) Blocked(realm Realm, source, account string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	now := l.opts.Now()
-	if l.globalBlockedLocked(now) {
+	if l.keyBlockedLocked(addressKey(source), now) {
 		return true
 	}
-	for _, key := range keys(source, account) {
-		if l.keyBlockedLocked(key, now) {
-			return true
-		}
-	}
-	return false
+	return l.keyBlockedLocked(accountKey(realm, account), now)
 }
 
-// Failure records one failed attempt for both keys.
-func (l *Limiter) Failure(source, account string) {
+// BlockedSource reports whether the source address alone is refused. It lets a
+// handler reject a blocked address before it even reads the account from the
+// database.
+func (l *Limiter) BlockedSource(source string) bool {
+	return l.Blocked("", source, "")
+}
+
+// Failure records one failed attempt for the source and the account.
+func (l *Limiter) Failure(realm Realm, source, account string) {
+	l.mu.Lock()
+	now := l.opts.Now()
+
+	l.global = prune(l.global, now.Add(-l.opts.AlertWindow))
+	l.global = append(l.global, now)
+	alert := len(l.global) >= l.opts.AlertFailures && now.Sub(l.lastAlertAt) >= l.opts.AlertWindow
+	if alert {
+		l.lastAlertAt = now
+	}
+	count := len(l.global)
+
+	if key := addressKey(source); key != "" {
+		l.recordSourceLocked(key, now)
+	}
+	if key := accountKey(realm, account); key != "" {
+		l.recordAccountLocked(key, source, now)
+	}
+	l.mu.Unlock()
+
+	if alert && l.opts.OnAlert != nil {
+		l.opts.OnAlert(count, l.opts.AlertWindow)
+	}
+}
+
+// Success clears the account counter of the authenticated realm and the source
+// counter, so an ordinary typo followed by a successful login does not creep
+// towards a block. The global counter is left alone: it counts failures, not
+// successes.
+func (l *Limiter) Success(realm Realm, source, account string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	now := l.opts.Now()
-	l.global = prune(l.global, now.Add(-l.opts.GlobalWindow))
-	l.global = append(l.global, now)
-
-	for _, key := range keys(source, account) {
-		l.recordLocked(key, now)
-	}
-}
-
-// Success clears the counters of both keys. The global ceiling is left alone:
-// it counts failures, not successes.
-func (l *Limiter) Success(source, account string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	for _, key := range keys(source, account) {
+	if key := accountKey(realm, account); key != "" {
 		delete(l.entries, key)
+	}
+	if key := addressKey(source); key != "" {
+		if tracked, ok := l.entries[key]; ok && !now.Before(tracked.blockedUntil) {
+			tracked.sourceFailures = nil
+		}
 	}
 }
 
@@ -161,12 +260,18 @@ func (l *Limiter) Keys() int {
 	return len(l.entries)
 }
 
-func (l *Limiter) globalBlockedLocked(now time.Time) bool {
-	l.global = prune(l.global, now.Add(-l.opts.GlobalWindow))
-	return len(l.global) >= l.opts.GlobalMaxFailures
+// GlobalFailures returns the number of failures inside the alert window. It is
+// observability only and never gates an attempt.
+func (l *Limiter) GlobalFailures() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(prune(l.global, l.opts.Now().Add(-l.opts.AlertWindow)))
 }
 
 func (l *Limiter) keyBlockedLocked(key string, now time.Time) bool {
+	if key == "" {
+		return false
+	}
 	tracked, ok := l.entries[key]
 	if !ok {
 		return false
@@ -182,7 +287,48 @@ func (l *Limiter) keyBlockedLocked(key string, now time.Time) bool {
 	return false
 }
 
-func (l *Limiter) recordLocked(key string, now time.Time) {
+func (l *Limiter) recordSourceLocked(key string, now time.Time) {
+	tracked := l.trackedLocked(key, now)
+	tracked.sourceFailures = prune(tracked.sourceFailures, now.Add(-l.opts.SourceWindow))
+	tracked.sourceFailures = append(tracked.sourceFailures, now)
+	if len(tracked.sourceFailures) >= l.opts.SourceMaxFailures {
+		tracked.blockedUntil = now.Add(l.opts.SourceBlock)
+	}
+}
+
+func (l *Limiter) recordAccountLocked(key, source string, now time.Time) {
+	tracked := l.trackedLocked(key, now)
+	cutoff := now.Add(-l.opts.AccountWindow)
+	kept := tracked.accountFailures[:0]
+	for _, failed := range tracked.accountFailures {
+		if failed.at.After(cutoff) {
+			kept = append(kept, failed)
+		}
+	}
+	tracked.accountFailures = append(kept, failure{at: now, source: strings.ToLower(strings.TrimSpace(source))})
+	if len(tracked.accountFailures) < l.opts.AccountMaxFailures {
+		return
+	}
+	if len(distinctSources(tracked.accountFailures)) < l.opts.AccountMinSources {
+		return
+	}
+	tracked.blockedUntil = now.Add(l.opts.AccountBlock)
+}
+
+// distinctSources counts the non-empty source addresses among the failures.
+// Unknown sources (an empty string) never count, so a connection whose address
+// cannot be determined can only ever block itself.
+func distinctSources(failures []failure) map[string]struct{} {
+	seen := make(map[string]struct{}, len(failures))
+	for _, failed := range failures {
+		if failed.source != "" {
+			seen[failed.source] = struct{}{}
+		}
+	}
+	return seen
+}
+
+func (l *Limiter) trackedLocked(key string, now time.Time) *entry {
 	tracked, ok := l.entries[key]
 	if !ok {
 		l.makeRoomLocked(now)
@@ -190,11 +336,7 @@ func (l *Limiter) recordLocked(key string, now time.Time) {
 		l.entries[key] = tracked
 	}
 	tracked.lastSeen = now
-	tracked.failures = prune(tracked.failures, now.Add(-l.opts.FailureWindow))
-	tracked.failures = append(tracked.failures, now)
-	if len(tracked.failures) >= l.opts.MaxFailures {
-		tracked.blockedUntil = now.Add(l.opts.BlockDuration)
-	}
+	return tracked
 }
 
 // makeRoomLocked keeps the map bounded. Expired entries go first; if the map is
@@ -205,7 +347,8 @@ func (l *Limiter) makeRoomLocked(now time.Time) {
 		return
 	}
 	for key, tracked := range l.entries {
-		if now.Sub(tracked.lastSeen) > l.opts.FailureWindow && !now.Before(tracked.blockedUntil) {
+		idle := now.Sub(tracked.lastSeen) > l.opts.SourceWindow
+		if idle && !now.Before(tracked.blockedUntil) {
 			delete(l.entries, key)
 			if len(l.entries) < l.opts.MaxKeys {
 				return
@@ -227,16 +370,20 @@ func (l *Limiter) makeRoomLocked(now time.Time) {
 	}
 }
 
-// keys lists the keys an attempt is counted against.
-func keys(source, account string) []string {
-	var out []string
-	if source = strings.TrimSpace(source); source != "" {
-		out = append(out, addressPrefix+strings.ToLower(source))
+func addressKey(source string) string {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return ""
 	}
-	if account = strings.TrimSpace(account); account != "" {
-		out = append(out, accountPrefix+strings.ToLower(account))
+	return addressPrefix + strings.ToLower(source)
+}
+
+func accountKey(realm Realm, account string) string {
+	account = strings.TrimSpace(account)
+	if account == "" {
+		return ""
 	}
-	return out
+	return string(realm) + accountSuffix + strings.ToLower(account)
 }
 
 func prune(times []time.Time, cutoff time.Time) []time.Time {
@@ -281,18 +428,23 @@ func SourceKeyConn(conn net.Conn) string {
 // Blocked reports whether the shared limiter currently refuses an attempt. The
 // administrator's switch short-circuits it: with the setting off no attempt is
 // ever refused and no counter is kept.
-func Blocked(source, account string) bool {
-	return config.LoginLimiterEnabled() && Default.Blocked(source, account)
+func Blocked(realm Realm, source, account string) bool {
+	return config.LoginLimiterEnabled() && Default.Blocked(realm, source, account)
+}
+
+// BlockedSource is Blocked for the address alone.
+func BlockedSource(source string) bool {
+	return config.LoginLimiterEnabled() && Default.BlockedSource(source)
 }
 
 // Failure records a failed attempt on the shared limiter.
-func Failure(source, account string) {
+func Failure(realm Realm, source, account string) {
 	if config.LoginLimiterEnabled() {
-		Default.Failure(source, account)
+		Default.Failure(realm, source, account)
 	}
 }
 
 // Success clears the shared limiter's counters for these keys.
-func Success(source, account string) {
-	Default.Success(source, account)
+func Success(realm Realm, source, account string) {
+	Default.Success(realm, source, account)
 }
