@@ -165,24 +165,22 @@ func TestNextAttemptStopsAtMaxRetryAge(t *testing.T) {
 	}
 }
 
-func TestEntriesGroupRecipientsByDomain(t *testing.T) {
+func TestEntriesWriteOneRowPerRecipient(t *testing.T) {
 	now := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
 	entries, err := Entries(7, "grouped@example.com", "sender@example.com",
-		[]string{"a@one.example", "b@two.example", "c@one.example", ""}, now)
+		[]string{"a@one.example", "b@two.example", "c@one.example", "", "A@One.example"}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 2 {
-		t.Fatalf("entries = %+v, want one row per domain", entries)
+	if len(entries) != 3 {
+		t.Fatalf("entries = %d, want one row per distinct recipient (3)", len(entries))
 	}
-	// Domains are sorted, so the rows are deterministic.
-	if got := recipientsOf(t, entries[0]); len(got) != 2 || got[0] != "a@one.example" || got[1] != "c@one.example" {
-		t.Fatalf("first row recipients = %v, want the one.example pair", got)
-	}
-	if got := recipientsOf(t, entries[1]); len(got) != 1 || got[0] != "b@two.example" {
-		t.Fatalf("second row recipients = %v, want the two.example address", got)
-	}
-	for _, entry := range entries {
+	want := []string{"a@one.example", "b@two.example", "c@one.example"}
+	for i, entry := range entries {
+		got := recipientsOf(t, entry)
+		if len(got) != 1 || got[0] != want[i] {
+			t.Fatalf("row %d recipients = %v, want [%s]", i, got, want[i])
+		}
 		if entry.EmailID != 7 || entry.EnvelopeFrom != "sender@example.com" || entry.State != models.EmailQueuePending {
 			t.Fatalf("entry = %+v, want the email id, sender and pending state", entry)
 		}

@@ -287,15 +287,18 @@ unless you fully understand the exposure.
 
 ## Delivery and retries
 
-iMail keeps a durable outbound queue for mail addressed to other domains, for
-both submission paths: an SMTP client and the webmail compose window. The
-message is accepted (`250`, or a successful API response) once the message and
-its queue rows are committed, and a background worker delivers it from then on.
-Messages to mailboxes this server hosts are still delivered inline.
+iMail keeps a durable outbound queue for every outbound message, for all three
+submission paths: an SMTP client, the webmail compose window and a rule-based
+forward. The message is accepted (`250`, or a successful API response) once the
+message and its queue rows are committed, and a background worker delivers it
+from then on. Mailboxes this server hosts are queued too, so nothing depends on
+an inline delivery that a crash could lose: there is no window between the
+commit that acknowledges the message and the work that stores it in a local
+mailbox.
 
-One queue row is written per remote **domain**, not per message. A domain that
-accepted the message is never contacted again while another domain is still
-being retried.
+One queue row is written per **recipient**, not per message or per domain. A
+recipient a remote server already accepted is never contacted again while
+another recipient is being retried, even when both are at the same domain.
 
 - **Durability**: the body is written to the database before `DATA` is
   acknowledged. The message row and the queue row commit in one transaction, so
@@ -314,7 +317,7 @@ being retried.
   *failed* (with the last error) when a domain finally gave up. Every attempt is
   logged with the queue id, the message id and the recipients.
 - **Outbox panel**: the Security page under Administration shows the number of
-  waiting and finally failed queue rows — one per remote domain — and lets an
+  waiting and finally failed queue rows — one per recipient — and lets an
   administrator inspect them. The list is paged and shows the recipients, the
   attempt count, the last error and the last update. A **failed** row can be
   retried (it goes back to the queue at once and its 72-hour retry window
@@ -330,17 +333,22 @@ being retried.
 - **One worker**: a single worker runs per process, and a row is claimed with a
   short lease in a conditional update, so two concurrent deliveries of the same
   row cannot happen.
-- **If a local recipient copy fails** while a remote copy is queued, the SMTP
-  client already has its `250`: the inline failure is recorded on the sent copy
-  and the queued copies are still delivered.
-- **Retry granularity is the domain**: if one recipient at a domain is accepted
-  and another is rejected inside the same transaction, the retry can deliver the
-  message twice to the recipient that was already accepted. Per-recipient state
-  would be needed to avoid that, which this queue does not keep.
-- **Rule-based forwarding** (a rule that forwards incoming mail) is unchanged and
-  still synchronous.
-- **No bounce is generated**: a permanently rejected message is marked failed in
-  the sent folder and logged; it is not mailed back to the local sender.
+- **Local mailboxes** are queued like any other recipient, and the worker
+  delivers them through the same MX/loopback path. A crash after the commit can
+  therefore no longer lose the local copy.
+- **Retry granularity is the recipient**: a partial success inside one domain is
+  recorded exactly, and a retry only repeats the recipients that are still
+  outstanding.
+- **Rule-based forwarding** is queued as well: the forwarded message and its
+  queue rows are written in one transaction, and the outbound worker retries it
+  with the same backoff. A forward to a mailbox on this server is still a local
+  mailbox copy (no SMTP round trip).
+- **Bounces**: when a row finally fails and the envelope sender is a mailbox on
+  this server, a small delivery status notification (`MAILER-DAEMON`, RFC 3464
+  `multipart/report`) is stored in that mailbox in the same transaction as the
+  failure. Nothing is sent to a remote sender, so the server produces no
+  backscatter, and a message whose envelope sender is `MAILER-DAEMON` never
+  generates another bounce.
 - **Storage**: the `email_queue` table keeps delivered and failed rows as a
   delivery record, like the rest of the database. It lives in the same database
   file or server as the mailboxes, so the existing backup covers it. The table

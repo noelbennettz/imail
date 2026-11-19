@@ -12,7 +12,6 @@ import (
 	"github.com/noelbennettz/imail/models"
 	"github.com/noelbennettz/imail/services/rule/match"
 	"github.com/noelbennettz/imail/utils/context"
-	"github.com/noelbennettz/imail/utils/send"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 )
@@ -107,14 +106,16 @@ func doForward(ctx *context.Context, email *parsemail.Email, forwardAddress stri
 		return forwardToLocalUser(ctx, email, account, forwardAddress)
 	}
 
+	// The forward is queued like any other outbound message, so a remote
+	// failure is retried by the worker instead of failing the inbound delivery.
 	if len(rawEmailData) > 0 {
-		err := send.ForwardRaw(ctx, email, rawEmailData, forwardAddress, user)
-		if err == nil {
+		if err := enqueueForward(ctx, email, rawEmailData, forwardAddress, user); err == nil {
 			return nil
+		} else {
+			log.WithContext(ctx).Warnf("Queueing the raw forward failed, queueing the remade message:%v", err)
 		}
-		log.WithContext(ctx).Warnf("Raw forward failed, retry remail forward:%v", err)
 	}
-	return send.Forward(ctx, email, forwardAddress, user)
+	return enqueueForward(ctx, email, email.ForwardBuildBytes(ctx, user, forwardAddress), forwardAddress, user)
 }
 
 func forwardToLocalUser(ctx *context.Context, email *parsemail.Email, account, forwardAddress string) error {

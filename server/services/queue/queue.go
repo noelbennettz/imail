@@ -15,7 +15,6 @@ package queue
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -113,32 +112,24 @@ func Recipients(entry *models.EmailQueue) ([]string, error) {
 	return recipients, nil
 }
 
-// Entries builds one queue row per remote recipient domain. Retrying per domain
-// is what keeps a domain that already accepted the message from receiving it
-// again when another domain is still failing.
+// Entries builds one queue row per recipient. Delivering each recipient on its
+// own means a partial success inside one domain is recorded exactly: a retry
+// only ever repeats the recipients that are still outstanding, never one that a
+// remote server already accepted.
 func Entries(emailID int, msgID, envelopeFrom string, recipients []string, now time.Time) ([]models.EmailQueue, error) {
-	byDomain := make(map[string][]string)
-	var domains []string
+	seen := make(map[string]struct{}, len(recipients))
+	entries := make([]models.EmailQueue, 0, len(recipients))
 	for _, address := range recipients {
 		address = strings.TrimSpace(address)
 		if address == "" {
 			continue
 		}
-		_, domain, found := strings.Cut(strings.ToLower(address), "@")
-		if !found {
-			// Addresses without a domain cannot be grouped; they get their own
-			// row so the failure is visible instead of being dropped.
-			domain = address
+		key := strings.ToLower(address)
+		if _, duplicate := seen[key]; duplicate {
+			continue
 		}
-		if _, seen := byDomain[domain]; !seen {
-			domains = append(domains, domain)
-		}
-		byDomain[domain] = append(byDomain[domain], address)
-	}
-	sort.Strings(domains)
-	entries := make([]models.EmailQueue, 0, len(domains))
-	for _, domain := range domains {
-		entry, err := Entry(emailID, msgID, envelopeFrom, byDomain[domain], now)
+		seen[key] = struct{}{}
+		entry, err := Entry(emailID, msgID, envelopeFrom, []string{address}, now)
 		if err != nil {
 			return nil, err
 		}
@@ -207,7 +198,9 @@ func MarkDelivered(ctx *context.Context, entry *models.EmailQueue, now time.Time
 }
 
 // MarkFailed records the final failure of an entry and marks the email as
-// failed. The error text is kept on both rows.
+// failed. The error text is kept on both rows. When the envelope sender is a
+// local mailbox a delivery status notification is stored in that mailbox in the
+// same transaction.
 func MarkFailed(ctx *context.Context, entry *models.EmailQueue, reason string, now time.Time) error {
 	now = now.UTC()
 	return db.Transaction(db.Instance, func(session *xorm.Session) error {
@@ -220,6 +213,7 @@ func MarkFailed(ctx *context.Context, entry *models.EmailQueue, reason string, n
 		}); err != nil {
 			return err
 		}
+		insertBounceBestEffort(session, entry, reason, now)
 		return finalizeEmail(session, entry.EmailID)
 	})
 }

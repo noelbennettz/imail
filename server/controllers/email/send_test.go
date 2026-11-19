@@ -227,3 +227,61 @@ func TestWebmailSendReportsCommitFailure(t *testing.T) {
 		t.Fatalf("rows after the failed commit = email %d queue %d, want 0/0", emails, queued)
 	}
 }
+
+// TestWebmailQueuesLocalMailboxesToo: a mailbox this server hosts is queued
+// like every other recipient, so the acknowledged commit already covers it.
+func TestWebmailQueuesLocalMailboxesToo(t *testing.T) {
+	engine, _ := useWebmailTestDatabase(t)
+	ctx := &context.Context{UserID: 1, UserAccount: "sender", UserName: "Sender", Lang: "en"}
+	recorder := httptest.NewRecorder()
+	Send(ctx, recorder, httptest.NewRequest("POST", "/api/email/send",
+		strings.NewReader(webmailRequestBody(t, "local@example.com"))))
+	if decoded := decodeWebmailResponse(t, recorder); decoded.ErrorNo != 0 {
+		t.Fatalf("response = %+v, want success", decoded)
+	}
+
+	var rows []models.EmailQueue
+	if err := engine.Find(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("queue rows = %d, want the local mailbox", len(rows))
+	}
+	recipients, err := queue.Recipients(&rows[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recipients) != 1 || recipients[0] != "local@example.com" {
+		t.Fatalf("queued recipients = %v, want the local mailbox", recipients)
+	}
+}
+
+// TestWebmailUsesOneQueueRowPerRecipient: two recipients in the same domain get
+// two rows, so a partial success is recorded per recipient.
+func TestWebmailUsesOneQueueRowPerRecipient(t *testing.T) {
+	engine, _ := useWebmailTestDatabase(t)
+	ctx := &context.Context{UserID: 1, UserAccount: "sender", UserName: "Sender", Lang: "en"}
+	recorder := httptest.NewRecorder()
+	Send(ctx, recorder, httptest.NewRequest("POST", "/api/email/send",
+		strings.NewReader(webmailRequestBody(t, "one@remote.example", "two@remote.example"))))
+	if decoded := decodeWebmailResponse(t, recorder); decoded.ErrorNo != 0 {
+		t.Fatalf("response = %+v, want success", decoded)
+	}
+
+	var rows []models.EmailQueue
+	if err := engine.Find(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("queue rows = %d, want one per recipient", len(rows))
+	}
+	for _, row := range rows {
+		recipients, err := queue.Recipients(&row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(recipients) != 1 {
+			t.Fatalf("row recipients = %v, want exactly one address", recipients)
+		}
+	}
+}
