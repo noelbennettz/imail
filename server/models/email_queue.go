@@ -24,13 +24,13 @@ type EmailQueue struct {
 	MsgID        string         `xorm:"msg_id varchar(255) notnull default('')"`
 	EnvelopeFrom string         `xorm:"envelope_from varchar(320) notnull default('')"`
 	Recipients   string         `xorm:"recipients text comment('JSON array of envelope recipients')"`
-	State        int8           `xorm:"state tinyint(4) notnull default(0) index(ix_email_queue_state)"`
+	State        int8           `xorm:"state tinyint(4) notnull default(0) index(ix_email_queue_state) index(ix_email_queue_state_time)"`
 	Attempts     int            `xorm:"attempts notnull default(0)"`
 	NextAttempt  time.Time      `xorm:"next_attempt index(ix_email_queue_next)"`
 	LeaseUntil   time.Time      `xorm:"lease_until comment('a delivering row may be claimed again after this time')"`
 	LastError    sql.NullString `xorm:"last_error text"`
 	CreateTime   time.Time      `xorm:"create_time created"`
-	UpdateTime   time.Time      `xorm:"update_time updated"`
+	UpdateTime   time.Time      `xorm:"update_time updated index(ix_email_queue_state_time)"`
 }
 
 func (d *EmailQueue) TableName() string {
