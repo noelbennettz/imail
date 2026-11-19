@@ -1,3 +1,67 @@
+name: Tests
+
+# The image build proves that the tree compiles; this job proves that it works.
+# It builds the front end because server/listen/http_server embeds its dist/,
+# runs the front-end tests, then runs the Go suite - including the root package,
+# which starts the real server on its low ports. GitHub's runner can bind those
+# after the sysctl step below.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Vet, front-end tests and Go tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: fe/yarn.lock
+
+      - name: Install Yarn
+        run: npm install --global yarn@1.22.22
+
+      - name: Build and test the front end
+        working-directory: fe
+        run: |
+          yarn install --frozen-lockfile
+          yarn test
+          yarn build
+
+      # server/listen/http_server embeds dist/*, so the Go build needs the front
+      # end in place even for a test run.
+      - name: Copy the front end into the embedded path
+        run: |
+          rm -rf server/listen/http_server/dist
+          cp -r fe/dist server/listen/http_server/dist
+
+      - name: Vet
+        working-directory: server
+        run: go vet ./...
+
       # main_test.go and the IMAP/POP3 tests load ./config/ssl/{private.key,
       # public.crt}; those files are gitignored operator data, so CI creates a
       # throwaway self-signed pair before the suite.
@@ -10,3 +74,14 @@
             -subj "/CN=localhost"
 
       # main_test.go starts the real server: SMTP on 25, HTTP on 80, HTTPS on
+      # 443 and submission on 587, before it moves the API to setup_port. A
+      # GitHub-hosted runner is not root, so lower the unprivileged floor.
+      - name: Allow the integration test to bind its low ports
+        run: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=0
+
+      - name: Go tests
+        working-directory: server
+        env:
+          setup_port: 17888
+          IMAIL_ROOT: ${{ github.workspace }}/server/
+        run: go test -p 1 ./...
