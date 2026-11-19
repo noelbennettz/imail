@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/noelbennettz/imail/utils/context"
@@ -62,10 +63,16 @@ type Config struct {
 	// under config/ssl/domains/<domain>/.
 	DomainCertificates map[string]DomainCertificate `json:"domainCertificates"`
 	// DefaultQuotaMB applies to new users; 0 means unlimited.
-	DefaultQuotaMB int               `json:"defaultQuotaMB"`
-	Tables         map[string]string `json:"-"`
-	TablesInitData map[string]string `json:"-"`
-	setupPort      int               // Port used during the setup phase
+	DefaultQuotaMB int `json:"defaultQuotaMB"`
+	// LimitFailedSignins bounds failed mail authentications: five failures
+	// within fifteen minutes block the source address and the account for
+	// fifteen minutes. It is a pointer so a config.json written before the
+	// setting existed (field absent) keeps the protection on; a plain bool
+	// would read the missing field as "off".
+	LimitFailedSignins *bool             `json:"limitFailedSignins"`
+	Tables             map[string]string `json:"-"`
+	TablesInitData     map[string]string `json:"-"`
+	setupPort          int               // Port used during the setup phase
 }
 
 var ROOT_PATH = ""
@@ -155,6 +162,34 @@ func (c *Config) ApplyDefaults() {
 		}
 	}
 	c.Domains = domains
+
+	if c.LimitFailedSignins == nil {
+		enabled := true
+		c.LimitFailedSignins = &enabled
+	}
+	SetLoginLimiterEnabled(*c.LimitFailedSignins)
+}
+
+// loginLimiterEnabled is the live value of LimitFailedSignins. The mail
+// listeners read it on every authentication attempt, so the administrator's
+// switch takes effect without restarting the process; the atomic keeps that
+// read free of data races with the settings API.
+var loginLimiterEnabled atomic.Bool
+
+func init() {
+	loginLimiterEnabled.Store(true)
+}
+
+// LoginLimiterEnabled reports whether failed sign-ins are currently limited.
+// A configuration loaded without the field counts as enabled.
+func LoginLimiterEnabled() bool {
+	return loginLimiterEnabled.Load()
+}
+
+// SetLoginLimiterEnabled changes the live value. The caller persists the
+// setting in config.json and updates Instance; this only publishes it.
+func SetLoginLimiterEnabled(enabled bool) {
+	loginLimiterEnabled.Store(enabled)
 }
 
 // TLSVersions returns the configured protocol bounds. The server only

@@ -1,4 +1,9 @@
 export default {
+  "admin_security": "Security",
+  "security_desc": "Protections that apply to the whole server for mail sign-ins.",
+  "limit_failed_signins": "Limit failed sign-ins",
+  "limit_failed_signins_desc": "After 5 failed attempts within 15 minutes, further attempts from the same address and for the same account are refused for 15 minutes with the protocol's ordinary authentication failure. Counters are kept in memory only and are cleared when the server restarts.",
+  "saved": "Saved",
   "logout": "Logout",
   "resetPwd": "Reset the account password",
   "disabled": "Disabled",

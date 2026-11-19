@@ -362,6 +362,11 @@ settings icon. The page is split into personal settings and administration.
   names are 1–20 characters, must begin with a letter or a digit, and may contain
   letters, digits, dots, underscores and hyphens; passwords are at least 8
   characters.
+- **Security** — the server-wide protection switch. “Limit failed sign-ins” is
+  on by default: five failed SMTP, IMAP or POP3 sign-ins within fifteen minutes
+  refuse further attempts from the same source address and for the same account
+  for fifteen minutes. The switch is applied immediately, without a restart,
+  and is saved in `config.json`.
 - **Domains** — add or remove configured domains. A domain with users cannot be
   removed, and the primary domain cannot be removed. Removing a domain triggers
   a listener reload.
@@ -444,6 +449,7 @@ before editing it; it is written atomically with mode `0600`.
   "dnsApiToken": "",
   "domainCertificates": {},
   "defaultQuotaMB": 1024,          // 0 = unlimited
+  "limitFailedSignins": true,      // false disables the failed sign-in limiter
   "spamFilterLevel": 0             // 0 off; 1 SPF+DKIM fail; 2 SPF fail; 3 DKIM fail
 }
 ```
@@ -611,6 +617,17 @@ scope is in [SECURITY.md](SECURITY.md). The list below is what the code does.
 - Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes (210,000
   iterations). Password changes revoke existing sessions. Minimum length is 8
   characters.
+- Failed sign-ins are limited while `limitFailedSignins` is on (the default,
+  including for `config.json` files written before the setting existed). Five
+  failures within fifteen minutes block the source address and the account for
+  fifteen minutes in SMTP AUTH, IMAP and POP3. A blocked attempt gets the
+  protocol's ordinary authentication failure (`535`, `NO [AUTHENTICATIONFAILED]`,
+  `-ERR`), so a block never tells an attacker whether the account exists, and the
+  check runs before the password hash is computed. A server-wide ceiling of 100
+  failures per minute bounds the hashing a spray from many addresses can cause,
+  and the in-memory table is capped at 4096 keys. Counters are not persisted:
+  restarting the server clears them. Administrators can turn the switch off on
+  the Security page; it applies immediately.
 - Multi-domain deployments require a full `account@domain` login for web,
   SMTP, IMAP and POP3. The account namespace is global: `account` is a unique
   column, so duplicate local parts across domains are not possible.

@@ -50,6 +50,9 @@
         <section v-if="activeTab === 'domains'" class="admin-panel">
           <DomainManagement/>
         </section>
+        <section v-if="activeTab === 'protection'" class="admin-panel">
+          <ProtectionSettings/>
+        </section>
         <section v-if="activeTab === 'users'" class="admin-panel">
           <UserManagement/>
         </section>
@@ -71,10 +74,11 @@
 <script setup>
 import {computed, onMounted, ref} from 'vue'
 import {useRouter} from 'vue-router'
-import {Back, Folder, Lock, OfficeBuilding, Setting, User} from '@element-plus/icons-vue'
+import {Back, Folder, Lock, OfficeBuilding, Key, Setting, User} from '@element-plus/icons-vue'
 import UserManagement from '@/components/UserManagement.vue'
 import DomainManagement from '@/components/DomainManagement.vue'
 import SecuritySettings from '@/components/SecuritySettings.vue'
+import ProtectionSettings from '@/components/ProtectionSettings.vue'
 import GroupSettings from '@/components/GroupSettings.vue'
 import RuleSettings from '@/components/RuleSettings.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
@@ -92,6 +96,7 @@ const tabs = [
   {name: 'rules', label: lang.admin_rules, icon: Setting, group: 'settings'},
   {name: 'users', label: lang.admin_users, icon: User, group: 'administration'},
   {name: 'domains', label: lang.admin_domains, icon: OfficeBuilding, group: 'administration'},
+  {name: 'protection', label: lang.admin_security, icon: Key, group: 'administration'},
 ]
 
 const settingsTabs = computed(() => tabs.filter(tab => tab.group === 'settings'))

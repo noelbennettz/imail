@@ -1,4 +1,9 @@
 export default {
+  "admin_security": "Sécurité",
+  "security_desc": "Protections appliquées à tout le serveur pour la connexion au courrier.",
+  "limit_failed_signins": "Limiter les échecs de connexion",
+  "limit_failed_signins_desc": "Après 5 échecs en 15 minutes, les tentatives depuis la même adresse et pour le même compte sont refusées pendant 15 minutes, avec l'échec d'authentification habituel du protocole. Les compteurs restent en mémoire et sont remis à zéro au redémarrage du serveur.",
+  "saved": "Enregistré",
   "logout": "Déconnexion",
   "resetPwd": "Réinitialiser le mot de passe du compte",
   "disabled": "Désactivé",
