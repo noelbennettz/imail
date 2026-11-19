@@ -1,13 +1,13 @@
 name: Docker image
 
-# Manual runs (Actions -> Docker image -> Run workflow) build the same image
-# as a push; the package is private until its visibility is changed.
+# Continuous image builds for main, pull requests and manual runs. A v* tag is
+# handled by release.yml, which also signs the image, attests an SBOM and
+# creates the GitHub release; keeping tags out of this workflow avoids building
+# the same image twice.
 on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   pull_request:
   workflow_dispatch:
 

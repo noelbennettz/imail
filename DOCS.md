@@ -640,6 +640,39 @@ hashes are upgraded to PBKDF2 on the next successful login, so no manual
 password reset is required. Sessions are stored in the database and the cookie
 is named `imail_session`, so an image update keeps users signed in.
 
+### Releases, signatures and SBOMs
+
+`main` publishes `latest`, `main` and `sha-<commit>` from the Docker image
+workflow. Publishing a tag (`v1.0.0`) starts the Release workflow instead, which
+
+- builds `linux/amd64` and `linux/arm64` and pushes the version tags
+  (`1.0.0`, `1.0`, `sha-<commit>`) to the same package;
+- signs the image digest with **cosign keyless**, using the workflow's GitHub
+  OIDC identity, so there is no key to manage or leak;
+- generates an **SPDX** SBOM with a pinned syft, attests it to the image and
+  attaches it to the GitHub release.
+
+The Dockerfile pins its base images (`node`, `golang`, `alpine`) by manifest
+list digest. Updating them is a visible change in the diff; run
+`docker buildx imagetools inspect <image>:<tag>` and replace the digest.
+
+Verify a release before deploying it:
+
+```bash
+IMAGE=ghcr.io/noelbennettz/imail
+TAG=v1.0.0
+
+cosign verify "$IMAGE:$TAG"   --certificate-identity-regexp '^https://github.com/noelbennettz/imail/.github/workflows/release.yml@'   --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+cosign verify-attestation --type spdxjson "$IMAGE:$TAG"   --certificate-identity-regexp '^https://github.com/noelbennettz/imail/.github/workflows/release.yml@'   --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+gh release download "$TAG" --pattern 'imail-*.spdx.json'
+```
+
+The signature proves the image came from this repository's Release workflow,
+and the SBOM lists the packages inside it. Deploying by digest
+(`docker pull "$IMAGE@sha256:..."`) pins exactly the image you verified.
+
 
 ## Backups and upgrades
 
