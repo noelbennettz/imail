@@ -27,39 +27,33 @@ const deliveryPendingError = "delivery result pending; outcome unknown after int
 
 type outgoingSender func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error)
 
-// outboundQueue describes the queue row that is written with an outbound email:
-// the envelope sender and the recipients another server has to accept. Local
-// recipients are delivered inline and never appear here.
+// outboundQueue describes the queue rows that are written with an outbound
+// email: the envelope sender and every envelope recipient. Local mailboxes are
+// queued too, so the message is fully durable once the transaction commits.
 type outboundQueue struct {
 	EnvelopeFrom string
 	Recipients   []string
 }
 
-// outboundPlan is the local/remote split of a message's recipients.
-type outboundPlan struct {
-	local  []*parsemail.User
-	remote []string
-}
-
-// splitOutboundRecipients separates the recipients of a message into mailboxes
-// this server hosts and addresses another server has to accept.
-func splitOutboundRecipients(email *parsemail.Email) outboundPlan {
+// outboundRecipients returns every envelope recipient of the message, deduped
+// and trimmed, including mailboxes this server hosts.
+func outboundRecipients(email *parsemail.Email) []string {
 	var recipients []*parsemail.User
 	for _, list := range [][]*parsemail.User{email.To, email.Cc, email.Bcc} {
 		recipients = append(recipients, list...)
 	}
-	local, remote := send.SplitRecipients(recipients, config.Instance.Domains)
-	return outboundPlan{local: local, remote: remote}
+	_, all := send.SplitRecipients(recipients, nil)
+	return all
 }
 
-func (s *Session) deliverOutgoingEmail(email *parsemail.Email, sender outgoingSender) error {
+func (s *Session) deliverOutgoingEmail(email *parsemail.Email) error {
 	ctx := s.Ctx
-	plan := splitOutboundRecipients(email)
+	recipients := outboundRecipients(email)
 	var enqueue *outboundQueue
-	if len(plan.remote) > 0 {
+	if len(recipients) > 0 {
 		enqueue = &outboundQueue{
 			EnvelopeFrom: email.From.EmailAddress,
-			Recipients:   plan.remote,
+			Recipients:   recipients,
 		}
 	}
 
@@ -77,46 +71,10 @@ func (s *Session) deliverOutgoingEmail(email *parsemail.Email, sender outgoingSe
 		log.WithContext(ctx).Infof("Outbox queued message %d msg_id=%q recipients=%d", saved.Id, saved.MsgID, len(enqueue.Recipients))
 	}
 
-	if len(plan.local) == 0 {
-		// Everything is queued: the queue row and the message committed in one
-		// transaction, so the client can be told the message was accepted.
-		return nil
-	}
-
-	deliveryErr, domainErrors := sender(ctx, email, plan.local)
-
-	if enqueue != nil {
-		// The queued copies are the client's only copy of the remote deliveries,
-		// so the client must not retry the whole message: an inline failure is
-		// recorded on the audit row and the remote copies are still delivered.
-		// The worker sets the final status once the queue row is done.
-		if deliveryErr != nil {
-			log.WithContext(ctx).Warnf("Inline delivery to local recipients failed after the message was queued: %v", deliveryErr)
-			if err := persistDeliveryResult(ctx, saved.Id, consts.EmailStatusDeliveryPending, "local delivery failed: "+deliveryErr.Error()); err != nil {
-				log.WithContext(ctx).Errorf("CRITICAL audit_event=delivery_result_persist_failed email_id=%d msg_id=%q error=%v", saved.Id, saved.MsgID, err)
-			}
-		}
-		return nil
-	}
-
-	targetStatus := consts.EmailStatusSent
-	var errorText any
-	if deliveryErr != nil {
-		targetStatus = consts.EmailStatusFail
-		errorText = deliveryErr.Error()
-	}
-
-	if err = persistDeliveryResult(ctx, saved.Id, targetStatus, errorText); err != nil {
-		log.WithContext(ctx).Errorf(
-			"CRITICAL audit_event=delivery_result_persist_failed email_id=%d msg_id=%q target_status=%d downstream_accepted=%t error=%v",
-			saved.Id, saved.MsgID, targetStatus, deliveryErr == nil, err,
-		)
-	}
-
-	// If the remote MX accepted DATA, returning a local 451 here would cause a
-	// duplicate delivery. The persistence failure is retained as pending state
-	// and a CRITICAL log; the SMTP result must still reflect the remote result.
-	return downstreamDeliverySMTPError(deliveryErr, domainErrors)
+	// The message row and every queue row committed in one transaction, so the
+	// client can be told the message was accepted: no delivery happens inline
+	// any more, and nothing can be lost between the commit and a delivery.
+	return nil
 }
 
 func persistDeliveryResult(ctx *context.Context, emailID int, status int8, errorText any) error {

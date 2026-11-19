@@ -21,7 +21,6 @@ import (
 	"github.com/noelbennettz/imail/services/rule"
 	"github.com/noelbennettz/imail/utils/array"
 	"github.com/noelbennettz/imail/utils/context"
-	"github.com/noelbennettz/imail/utils/send"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 )
@@ -74,7 +73,7 @@ func (s *Session) Data(r io.Reader) error {
 			return nil
 		}
 
-		return s.deliverOutgoingEmail(email, send.SendTo)
+		return s.deliverOutgoingEmail(email)
 
 	} else {
 		// Inbound mail

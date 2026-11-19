@@ -19,7 +19,6 @@ import (
 	"github.com/noelbennettz/imail/models"
 	"github.com/noelbennettz/imail/services/queue"
 	"github.com/noelbennettz/imail/utils/array"
-	"github.com/noelbennettz/imail/utils/async"
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/send"
 	log "github.com/sirupsen/logrus"
@@ -180,11 +179,14 @@ func Send(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 	// The message is rendered once: the stored copy and the queue rows must
 	// carry exactly the bytes that are delivered.
 	rawMIME := e.BuildBytes(ctx, true)
-	localRecipients, remoteRecipients := send.SplitRecipients(
+	// Every envelope recipient is queued, local mailboxes included: the queue
+	// row commits with the message, so nothing depends on an inline delivery
+	// that would be lost if the process stopped right after the commit.
+	_, allRecipients := send.SplitRecipients(
 		append(append(append([]*parsemail.User{}, e.To...), e.Cc...), e.Bcc...),
-		config.Instance.Domains,
+		nil,
 	)
-	queued := len(remoteRecipients) > 0
+	queued := len(allRecipients) > 0
 
 	initialStatus := int8(consts.EmailStatusSent)
 	initialError := sql.NullString{}
@@ -239,7 +241,7 @@ func Send(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		if !queued {
 			return nil
 		}
-		entries, err := queue.Entries(modelEmail.Id, modelEmail.MsgID, e.From.EmailAddress, remoteRecipients, time.Now())
+		entries, err := queue.Entries(modelEmail.Id, modelEmail.MsgID, e.From.EmailAddress, allRecipients, time.Now())
 		if err != nil {
 			return err
 		}
@@ -259,37 +261,7 @@ func Send(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 	e.MessageId = cast.ToInt64(modelEmail.Id)
 	e.MsgID = modelEmail.MsgID
 
-	log.WithContext(ctx).Infof("Webmail message %d queued for %d remote recipient(s)", modelEmail.Id, len(remoteRecipients))
-
-	if len(localRecipients) > 0 {
-		// Local mailboxes are still handed over inline, after the commit. When a
-		// remote copy is queued the final status belongs to the worker.
-		async.New(ctx).Process(func(p any) {
-			deliveryErr, _ := send.SendTo(ctx, e, localRecipients)
-			if queued {
-				if deliveryErr != nil {
-					log.WithContext(ctx).Warnf("Inline delivery to local recipients failed after the message was queued: %v", deliveryErr)
-					if _, err := db.Instance.Exec(db.WithContext(ctx, "update email set error=? where id=?"), webmailPendingError+": "+deliveryErr.Error(), modelEmail.Id); err != nil {
-						log.WithContext(ctx).Errorf("sql Error :%+v", err)
-					}
-				}
-				return
-			}
-
-			targetStatus := int8(consts.EmailStatusSent)
-			var errorText any
-			if deliveryErr != nil {
-				targetStatus = consts.EmailStatusFail
-				errorText = deliveryErr.Error()
-			}
-			if _, err := db.Instance.Exec(db.WithContext(ctx, "update email set status=?, error=? where id=?"), targetStatus, errorText, modelEmail.Id); err != nil {
-				log.WithContext(ctx).Errorf("sql Error :%+v", err)
-			}
-			if _, err := db.Instance.Exec(db.WithContext(ctx, "update user_email set status=? where email_id=?"), targetStatus, modelEmail.Id); err != nil {
-				log.WithContext(ctx).Errorf("sql Error :%+v", err)
-			}
-		}, nil)
-	}
+	log.WithContext(ctx).Infof("Webmail message %d queued for %d recipient(s)", modelEmail.Id, len(allRecipients))
 
 	response.NewSuccessResponse(i18n.GetText(ctx.Lang, "succ")).FPrint(w)
 }
