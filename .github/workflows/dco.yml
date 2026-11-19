@@ -1,0 +1,37 @@
+name: DCO
+
+# The Developer Certificate of Origin is a statement inside the commit message,
+# so it needs no GitHub App and no third-party service: this workflow reads the
+# commits of the pull request and checks the trailer line on each of them.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dco-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dco:
+    name: Signed-off-by
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Check the sign-off of every commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --quiet origin "${BASE_SHA}" "${HEAD_SHA}" || true
+          git cat-file -e "${BASE_SHA}^{commit}"
+          git cat-file -e "${HEAD_SHA}^{commit}"
+          bash scripts/check-dco.sh "${BASE_SHA}" "${HEAD_SHA}"
