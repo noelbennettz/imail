@@ -11,25 +11,89 @@ import (
 
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/controllers"
+	"github.com/noelbennettz/imail/dto/response"
+	"github.com/noelbennettz/imail/services/setup"
 	"github.com/noelbennettz/imail/utils/ip"
 	"github.com/noelbennettz/imail/utils/netutil"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 )
 
+// Paths of the setup wizard API. Everything except these, the static client,
+// /api/ping and the ACME challenge needs the one-time setup token.
+const (
+	setupAPIPath       = "/api/setup"
+	setupStatusPath    = "/api/setup/status"
+	setupVerifyPath    = "/api/setup/token/verify"
+	pingPath           = "/api/ping"
+	acmeChallengePath  = "/.well-known/"
+	setupTokenFailBody = `{"errorNo":406,"errorMsg":"setup token required","data":null}`
+)
+
 // Setup wizard server; exits once the setup wizard has finished
 var setupServer *http.Server
 
-func SetupStart() {
+// newSetupMux builds the HTTP handler of the setup wizard. It is separate from
+// SetupStart so tests can exercise it without binding a port.
+func newSetupMux(tokens *setup.SetupToken) http.Handler {
 	mux := http.NewServeMux()
 	fe, err := fs.Sub(local, "dist")
 	if err != nil {
 		panic(err)
 	}
+	// Static client assets and the API paths that must stay reachable without a
+	// token: the health check and the ACME HTTP-01 challenge.
 	mux.Handle("/", http.FileServer(http.FS(fe)))
-	mux.HandleFunc("/api/", contextIterceptor(controllers.Setup))
-	// Challenge requests look like /.well-known/acme-challenge/QPyMAyaWw9s5JvV1oruyqWHG7OqkHMJEHPoUz2046KM
-	mux.HandleFunc("/.well-known/", controllers.AcmeChallenge)
+	mux.HandleFunc(acmeChallengePath, controllers.AcmeChallenge)
+	mux.HandleFunc(pingPath, controllers.Ping)
+
+	// Minimal status for the first screen: whether setup is still open and
+	// whether a token is required. Nothing else is disclosed.
+	mux.HandleFunc(setupStatusPath, func(w http.ResponseWriter, r *http.Request) {
+		response.NewSuccessResponse(map[string]bool{
+			"initialized":    config.IsInit,
+			"requires_token": tokens.Enabled(),
+		}).FPrint(w)
+	})
+
+	// The first screen asks the browser to prove that it holds the token.
+	mux.HandleFunc(setupVerifyPath, requireSetupToken(tokens, func(w http.ResponseWriter, r *http.Request) {
+		response.NewSuccessResponse(map[string]bool{"ok": true}).FPrint(w)
+	}))
+
+	mux.HandleFunc(setupAPIPath, requireSetupToken(tokens, contextIterceptor(controllers.Setup)))
+
+	// No other API path exists during setup.
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		response.NewErrorResponse(response.ParamsError, "unknown setup endpoint", "").FPrint(w)
+	})
+	return mux
+}
+
+// requireSetupToken rejects every request without a valid setup token. Missing,
+// wrong and closed all get the same 403 body; a source address that failed too
+// often gets 429 instead.
+func requireSetupToken(tokens *setup.SetupToken, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		result := tokens.Verify(r.RemoteAddr, r.Header.Get(setup.TokenHeader))
+		if result != setup.VerifyAllowed {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(result.HTTPStatus())
+			w.Write([]byte(setupTokenFailBody))
+			return
+		}
+		next(w, r)
+	}
+}
+
+func SetupStart() {
+	tokens, err := setup.InitToken(config.IsInit)
+	if err != nil {
+		panic(err)
+	}
+	mux := newSetupMux(tokens)
 
 	HttpPort := 80
 	flag.IntVar(&HttpPort, "p", 80, "HTTP port during the setup phase")

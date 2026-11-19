@@ -1,5 +1,28 @@
 <template>
   <div id="main">
+    <div v-if="!unlocked" class="ctn token-gate">
+      <div class="desc">
+        <h2>{{ lang.setup_token_title }}</h2>
+        <div style="margin-top: 10px;">{{ lang.setup_token_desc }}</div>
+        <div class="token-hint">
+          <code>docker compose logs imail</code>
+          <span>{{ lang.setup_token_hint }}</span>
+        </div>
+      </div>
+      <div class="form" style="width: 400px;">
+        <el-form label-width="160px" @submit.prevent>
+          <el-form-item :label="lang.setup_token_label">
+            <el-input v-model="setupToken" :placeholder="lang.setup_token_placeholder"
+                      autocomplete="off" spellcheck="false" @keyup.enter="verifyToken"></el-input>
+          </el-form-item>
+        </el-form>
+        <el-button type="primary" id="next" :loading="tokenChecking" @click="verifyToken">
+          {{ lang.setup_token_continue }}
+        </el-button>
+      </div>
+    </div>
+
+    <template v-if="unlocked">
     <el-steps :active="active" align-center finish-status="success" id="status">
       <el-step :title="lang.welcome"/>
       <el-step :title="lang.setDatabase"/>
@@ -245,17 +268,68 @@
         lang.next
       }}
     </el-button>
+    </template>
 
   </div>
 </template>
 
 <script setup>
-import {nextTick, reactive, ref} from 'vue'
+import {nextTick, onMounted, reactive, ref} from 'vue'
 import {ElMessage} from 'element-plus'
 import lang from '../i18n/i18n';
 import axios from 'axios'
 import {Plus} from '@element-plus/icons-vue'
 import {http} from "@/utils/axios";
+import {clearSetupToken, getSetupToken, setSetupToken} from "@/utils/setupToken";
+
+// The wizard is served over plain HTTP before TLS exists, so it stays locked
+// until the token printed in the container log has been entered.
+const unlocked = ref(false)
+const setupToken = ref(getSetupToken())
+const tokenChecking = ref(false)
+
+const verifyToken = () => {
+  const value = setupToken.value.trim()
+  if (value === '') {
+    ElMessage.error(lang.setup_token_required)
+    return
+  }
+  tokenChecking.value = true
+  setSetupToken(value)
+  http.post('/api/setup/token/verify').then((res) => {
+    tokenChecking.value = false
+    if (res.errorNo !== 0) {
+      clearSetupToken()
+      ElMessage.error(lang.setup_token_invalid)
+      return
+    }
+    unlocked.value = true
+  }).catch((err) => {
+    tokenChecking.value = false
+    clearSetupToken()
+    if (err.response && err.response.status === 429) {
+      ElMessage.error(lang.setup_token_ratelimited)
+    } else {
+      ElMessage.error(lang.setup_token_invalid)
+    }
+  })
+}
+
+onMounted(() => {
+  // The status endpoint only says whether setup is still open and whether a
+  // token is needed; if a token from this session still verifies, skip the
+  // screen.
+  http.get('/api/setup/status').then((res) => {
+    if (res.errorNo === 0 && res.data && res.data.requires_token === false) {
+      unlocked.value = true
+      return
+    }
+    if (getSetupToken() !== '') {
+      verifyToken()
+    }
+  }).catch(() => {})
+})
+
 
 const waitDesc = ref(lang.wait_desc);
 
@@ -603,6 +677,28 @@ const next = () => {
   font-size: 32px;
   font-weight: 600;
   letter-spacing: -0.02em;
+}
+
+.token-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.token-hint code {
+  align-self: flex-start;
+  padding: 6px 10px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface-container);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.token-gate {
+  justify-content: center;
+  align-items: flex-start;
 }
 
 #status {
