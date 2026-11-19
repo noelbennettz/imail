@@ -77,7 +77,8 @@ and every licence text below — is in the repository.
 
 - **MPL-2.0** (`go-sql-driver/mysql`) is file-level copyleft: the unmodified
   files may be distributed alongside AGPL-3.0 code, but any file you patch has to
-  stay under MPL-2.0 and its source has to be available. iMail does not patch it.
+  stay under MPL-2.0 and its source has to be available. iMail does not patch it,
+  which is why MPL-2.0 is on the CI allowlist for this one dependency.
 - The **Apache-2.0** modules ship no `NOTICE` file, so section 4(d) adds nothing
   beyond keeping the licence text and this notice. Their patent grant in
   section 3 still applies to every user of iMail.

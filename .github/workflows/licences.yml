@@ -1,9 +1,13 @@
 name: Licences
 
 # Two scans with a fixed tool version: the Go modules the server links and the
-# production dependencies of the front end. Both allow only Apache-2.0,
-# BSD-2-Clause, BSD-3-Clause, ISC and MIT; a dependency under any other licence
-# fails the build. THIRD_PARTY_NOTICES.md lists the same components for humans.
+# production dependencies of the front end. Both allow Apache-2.0, BSD-2-Clause,
+# BSD-3-Clause, ISC, MIT and MPL-2.0; a dependency under any other licence fails
+# the build. THIRD_PARTY_NOTICES.md lists the same components for humans.
+#
+# MPL-2.0 is there for one unmodified dependency: github.com/go-sql-driver/mysql,
+# the optional MySQL driver. MPL-2.0 is file-level copyleft and is compatible
+# with AGPL-3.0 for an unpatched library; iMail never patches it.
 on:
   push:
     branches: [main]
@@ -42,7 +46,7 @@ jobs:
           "$(go env GOPATH)/bin/go-licenses" check ./... \
             --ignore github.com/noelbennettz/imail \
             --ignore modernc.org/mathutil \
-            --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT
+            --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MIT,MPL-2.0
         # modernc.org/mathutil is BSD-3-Clause (server/vendor/modernc.org/mathutil/LICENSE)
         # but the licence classifier inside go-licenses v1.6.0 does not recognise
         # the text, so it is skipped here and verified by hand instead.
@@ -70,4 +74,4 @@ jobs:
           set -euo pipefail
           npx --yes license-checker@25.0.1 --start fe \
             --production --excludePrivatePackages \
-            --onlyAllow "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0"
+            --onlyAllow "MIT;ISC;BSD-2-Clause;BSD-3-Clause;Apache-2.0;MPL-2.0"
