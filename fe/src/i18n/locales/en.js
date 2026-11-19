@@ -1,4 +1,7 @@
 export default {
+  "outbox_desc": "Queued outbound mail still waiting for delivery to other servers, and messages that finally failed. Delivery is retried with backoff for up to three days.",
+  "outbox_pending": "Waiting",
+  "outbox_failed": "Failed",
   "admin_security": "Security",
   "security_desc": "Protections that apply to the whole server for mail sign-ins.",
   "limit_failed_signins": "Limit failed sign-ins",

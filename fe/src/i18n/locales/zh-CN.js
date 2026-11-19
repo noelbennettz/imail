@@ -1,4 +1,7 @@
 export default {
+  "outbox_desc": "仍在等待投递到其他服务器的外发邮件，以及最终失败的邮件。投递会以退避方式重试，最长约三天。",
+  "outbox_pending": "等待中",
+  "outbox_failed": "已失败",
   "admin_security": "安全防护",
   "security_desc": "对整个服务器的邮件登录保护。",
   "limit_failed_signins": "限制登录失败次数",

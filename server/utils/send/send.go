@@ -68,14 +68,79 @@ func forwardData(ctx *context.Context, fromDomain string, data []byte, forwardAd
 }
 
 func Send(ctx *context.Context, e *parsemail.Email) (error, map[string]error) {
+	return SendTo(ctx, e, nil)
+}
+
+// SendTo delivers an email to the given recipients; nil means every To, Cc and
+// Bcc recipient. Outbound SMTP passes the recipients that belong to a local
+// domain, because the remote ones are queued for the worker instead.
+func SendTo(ctx *context.Context, e *parsemail.Email, recipients []*parsemail.User) (error, map[string]error) {
 	_, fromDomain := e.From.GetDomainAccount()
 
 	b := e.BuildBytes(ctx, true)
 
 	var to []*parsemail.User
-	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
+	if recipients == nil {
+		to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
+	} else {
+		to = recipients
+	}
 
 	return doSend(ctx, fromDomain, b, to, e.From.EmailAddress)
+}
+
+// Deliver sends already rendered MIME to fixed envelope recipients. The
+// outbound queue stores the rendered message, so a retry sends exactly the same
+// bytes and the DKIM signature stays valid.
+func Deliver(ctx *context.Context, from string, recipients []string, data []byte) (error, map[string]error) {
+	fromDomain := config.Instance.Domain
+	if _, domain, found := strings.Cut(from, "@"); found && domain != "" {
+		fromDomain = domain
+	}
+	to := make([]*parsemail.User, 0, len(recipients))
+	for _, address := range recipients {
+		to = append(to, &parsemail.User{EmailAddress: address})
+	}
+	return doSend(ctx, fromDomain, data, to, from)
+}
+
+// SplitRecipients separates message recipients into mailboxes this server hosts
+// (delivered inline) and remote addresses (queued, one queue row per domain).
+func SplitRecipients(recipients []*parsemail.User, domains []string) (local []*parsemail.User, remote []string) {
+	localDomains := make(map[string]struct{}, len(domains))
+	for _, domain := range domains {
+		localDomains[strings.ToLower(strings.TrimSpace(domain))] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(recipients))
+	for _, user := range recipients {
+		if user == nil {
+			continue
+		}
+		address := strings.TrimSpace(user.EmailAddress)
+		if address == "" {
+			continue
+		}
+		key := strings.ToLower(address)
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
+		if _, domain, found := strings.Cut(key, "@"); found {
+			if _, isLocal := localDomains[domain]; isLocal {
+				local = append(local, user)
+				continue
+			}
+		}
+		remote = append(remote, address)
+	}
+	return local, remote
+}
+
+// IsPermanentSMTPResponse reports whether err is a 5xx reply from the remote
+// server. Retrying such a delivery cannot succeed, so the queue fails it
+// immediately.
+func IsPermanentSMTPResponse(err error) bool {
+	return isPermanentSMTPResponse(err)
 }
 
 func doSend(ctx *context.Context, fromDomain string, data []byte, to []*parsemail.User, from string) (error, map[string]error) {

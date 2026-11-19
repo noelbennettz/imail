@@ -7,6 +7,8 @@ import (
 	"net/textproto"
 	"strings"
 	"testing"
+
+	"github.com/noelbennettz/imail/dto/parsemail"
 )
 
 // TestTryDeliverToMXRejectsNullMX covers RFC 7505: a "." (or empty) MX must
@@ -94,5 +96,23 @@ func TestDeliveryFailureCauseKeepsExplicitSMTPRejection(t *testing.T) {
 
 	if got := deliveryFailureCause(lookupErr, rejection); got != rejection {
 		t.Fatalf("deliveryFailureCause() = %v, want explicit SMTP rejection %v", got, rejection)
+	}
+}
+
+func TestSplitRecipients(t *testing.T) {
+	local, remote := SplitRecipients([]*parsemail.User{
+		{EmailAddress: "alice@example.com"},
+		{EmailAddress: "bob@Example.COM"},
+		{EmailAddress: "carol@other.example"},
+		{EmailAddress: "carol@other.example"},
+		nil,
+		{EmailAddress: ""},
+	}, []string{"example.com"})
+
+	if len(local) != 2 || local[0].EmailAddress != "alice@example.com" || local[1].EmailAddress != "bob@Example.COM" {
+		t.Fatalf("local = %+v, want the two local recipients", local)
+	}
+	if len(remote) != 1 || remote[0] != "carol@other.example" {
+		t.Fatalf("remote = %v, want the single remote address", remote)
 	}
 }

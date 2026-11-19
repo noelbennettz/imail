@@ -6,6 +6,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"strings"
+	"time"
 
 	smtp "github.com/emersion/go-smtp"
 	"github.com/noelbennettz/imail/config"
@@ -13,8 +14,10 @@ import (
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/parsemail"
 	"github.com/noelbennettz/imail/models"
+	"github.com/noelbennettz/imail/services/queue"
 	"github.com/noelbennettz/imail/utils/array"
 	"github.com/noelbennettz/imail/utils/context"
+	"github.com/noelbennettz/imail/utils/send"
 	log "github.com/sirupsen/logrus"
 	"xorm.io/builder"
 	"xorm.io/xorm"
@@ -22,11 +25,45 @@ import (
 
 const deliveryPendingError = "delivery result pending; outcome unknown after interruption"
 
-type outgoingSender func(*context.Context, *parsemail.Email) (error, map[string]error)
+type outgoingSender func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error)
+
+// outboundQueue describes the queue row that is written with an outbound email:
+// the envelope sender and the recipients another server has to accept. Local
+// recipients are delivered inline and never appear here.
+type outboundQueue struct {
+	EnvelopeFrom string
+	Recipients   []string
+}
+
+// outboundPlan is the local/remote split of a message's recipients.
+type outboundPlan struct {
+	local  []*parsemail.User
+	remote []string
+}
+
+// splitOutboundRecipients separates the recipients of a message into mailboxes
+// this server hosts and addresses another server has to accept.
+func splitOutboundRecipients(email *parsemail.Email) outboundPlan {
+	var recipients []*parsemail.User
+	for _, list := range [][]*parsemail.User{email.To, email.Cc, email.Bcc} {
+		recipients = append(recipients, list...)
+	}
+	local, remote := send.SplitRecipients(recipients, config.Instance.Domains)
+	return outboundPlan{local: local, remote: remote}
+}
 
 func (s *Session) deliverOutgoingEmail(email *parsemail.Email, sender outgoingSender) error {
 	ctx := s.Ctx
-	_, saved, err := saveEmail(ctx, email.Size, s.RawEmailData, email, ctx.UserID, int(consts.EmailTypeSend), nil, true, true)
+	plan := splitOutboundRecipients(email)
+	var enqueue *outboundQueue
+	if len(plan.remote) > 0 {
+		enqueue = &outboundQueue{
+			EnvelopeFrom: email.From.EmailAddress,
+			Recipients:   plan.remote,
+		}
+	}
+
+	_, saved, err := saveEmail(ctx, email.Size, s.RawEmailData, email, ctx.UserID, int(consts.EmailTypeSend), nil, true, true, enqueue)
 	if err != nil {
 		log.WithContext(ctx).Errorf("CRITICAL audit_event=initial_persist_failed direction=outbound msg_id=%q error=%v", email.MsgID, err)
 		var smtpErr *smtp.SMTPError
@@ -36,7 +73,31 @@ func (s *Session) deliverOutgoingEmail(email *parsemail.Email, sender outgoingSe
 		return localPersistenceSMTPError()
 	}
 
-	deliveryErr, domainErrors := sender(ctx, email)
+	if enqueue != nil {
+		log.WithContext(ctx).Infof("Outbox queued message %d msg_id=%q recipients=%d", saved.Id, saved.MsgID, len(enqueue.Recipients))
+	}
+
+	if len(plan.local) == 0 {
+		// Everything is queued: the queue row and the message committed in one
+		// transaction, so the client can be told the message was accepted.
+		return nil
+	}
+
+	deliveryErr, domainErrors := sender(ctx, email, plan.local)
+
+	if enqueue != nil {
+		// The queued copies are the client's only copy of the remote deliveries,
+		// so the client must not retry the whole message: an inline failure is
+		// recorded on the audit row and the remote copies are still delivered.
+		// The worker sets the final status once the queue row is done.
+		if deliveryErr != nil {
+			log.WithContext(ctx).Warnf("Inline delivery to local recipients failed after the message was queued: %v", deliveryErr)
+			if err := persistDeliveryResult(ctx, saved.Id, consts.EmailStatusDeliveryPending, "local delivery failed: "+deliveryErr.Error()); err != nil {
+				log.WithContext(ctx).Errorf("CRITICAL audit_event=delivery_result_persist_failed email_id=%d msg_id=%q error=%v", saved.Id, saved.MsgID, err)
+			}
+		}
+		return nil
+	}
 
 	targetStatus := consts.EmailStatusSent
 	var errorText any
@@ -98,7 +159,7 @@ func localPersistenceSMTPError() error {
 	}
 }
 
-func persistInitialAudit(ctx *context.Context, modelEmail models.Email, userIDs []int) (*models.Email, error) {
+func persistInitialAudit(ctx *context.Context, modelEmail models.Email, userIDs []int, enqueue *outboundQueue) (*models.Email, error) {
 	var saved models.Email
 	err := db.Transaction(db.Instance, func(session *xorm.Session) error {
 		candidate := modelEmail
@@ -113,6 +174,21 @@ func persistInitialAudit(ctx *context.Context, modelEmail models.Email, userIDs 
 			relation := models.UserEmail{EmailID: candidate.Id, UserID: userID, Status: candidate.Status}
 			if _, err := session.Insert(&relation); err != nil {
 				return err
+			}
+		}
+		// The queue row commits with the message, so an accepted message is
+		// never lost between the audit insert and the enqueue.
+		if enqueue != nil && len(enqueue.Recipients) > 0 {
+			// One row per remote domain: a domain that accepts the message is
+			// never contacted again while another domain retries.
+			entries, err := queue.Entries(candidate.Id, candidate.MsgID, enqueue.EnvelopeFrom, enqueue.Recipients, time.Now())
+			if err != nil {
+				return err
+			}
+			for i := range entries {
+				if _, err := session.Insert(&entries[i]); err != nil {
+					return err
+				}
 			}
 		}
 		saved = candidate

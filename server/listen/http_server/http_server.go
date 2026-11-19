@@ -50,6 +50,7 @@ func router(mux *http.ServeMux) {
 	mux.HandleFunc("/api/settings/modify_password", contextIterceptor(controllers.ModifyPassword))
 	mux.HandleFunc("/api/admin/security", contextIterceptor(controllers.SecuritySettings))
 	mux.HandleFunc("/api/admin/security/save", contextIterceptor(controllers.SaveSecuritySettings))
+	mux.HandleFunc("/api/admin/outbox", contextIterceptor(controllers.OutboxStatus))
 	mux.HandleFunc("/api/rule/get", contextIterceptor(controllers.GetRule))
 	mux.HandleFunc("/api/rule/add", contextIterceptor(controllers.UpsertRule))
 	mux.HandleFunc("/api/rule/update", contextIterceptor(controllers.UpsertRule))

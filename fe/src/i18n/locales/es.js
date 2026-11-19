@@ -1,4 +1,7 @@
 export default {
+  "outbox_desc": "Correo saliente que aún espera entrega a otros servidores, y mensajes que fallaron definitivamente. La entrega se reintenta con esperas crecientes durante un máximo de tres días.",
+  "outbox_pending": "En espera",
+  "outbox_failed": "Fallido",
   "admin_security": "Seguridad",
   "security_desc": "Protecciones para todo el servidor en el inicio de sesión del correo.",
   "limit_failed_signins": "Limitar los inicios de sesión fallidos",
