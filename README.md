@@ -3,6 +3,11 @@
 > Applies to the current `main`, published as `ghcr.io/noelbennettz/imail:latest`
 > (also tagged `main` and `sha-<commit>`). Documentation for an older release is
 > kept on the project site under `versions/<tag>/`.
+>
+> A `v*` tag produces a signed, attested release: versioned image tags, a cosign
+> keyless signature and an SPDX SBOM attached to the GitHub release. See
+> [Releases, signatures and SBOMs](DOCS.md#releases-signatures-and-sboms) for the
+> `cosign verify` commands.
 
 **Status: beta** — incompatible changes between versions are possible, so back
 up `config/` before you upgrade.
