@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"database/sql"
 	"fmt"
 	"net/textproto"
 	"strings"
@@ -10,8 +11,10 @@ import (
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/parsemail"
 	"github.com/noelbennettz/imail/models"
+	"github.com/noelbennettz/imail/services/quota"
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/send"
+	"xorm.io/xorm"
 )
 
 func localDomains() []string {
@@ -81,35 +84,81 @@ func localRecipients(address string) ([]*models.User, error) {
 	return admins, nil
 }
 
-// deliverLocal inserts the mailbox relation for every local recipient. The
-// message row already exists, so a retry is idempotent: an existing relation is
-// left alone.
-func deliverLocal(ctx *context.Context, emailID int, recipients []string) error {
+// deliverLocal stores an inbound copy for each local recipient, exactly like an
+// SMTP delivery would: a received email row with its own id and an unread Inbox
+// relation. This keeps the sender's Sent copy and the recipient's Inbox copy
+// independent, including when both are the same user.
+func deliverLocal(ctx *context.Context, original *models.Email, recipients []string) error {
 	for _, address := range recipients {
 		users, err := localRecipients(address)
 		if err != nil {
 			return err
 		}
+
+		var pending []*models.User
 		for _, user := range users {
-			exists, err := db.Instance.Table(&models.UserEmail{}).
-				Where("email_id=? and user_id=? and status=?", emailID, user.ID, consts.EmailStatusWait).
-				Exist()
+			exists, err := localInboxCopyExists(user.ID, original.MsgID)
 			if err != nil {
 				return err
 			}
-			if exists {
-				continue
+			if !exists {
+				pending = append(pending, user)
 			}
-			if _, err := db.Instance.Insert(&models.UserEmail{
-				UserID:  user.ID,
-				EmailID: emailID,
-				Status:  consts.EmailStatusWait,
-				GroupId: 0,
-				IsRead:  0,
-			}); err != nil {
-				return fmt.Errorf("store local copy for %s: %w", address, err)
+		}
+		if len(pending) == 0 {
+			continue
+		}
+		if err := quota.Check(pending, len(original.RawMIME)); err != nil {
+			return &textproto.Error{Code: 552, Msg: "mailbox quota exceeded"}
+		}
+
+		copyEmail := *original
+		copyEmail.Id = 0
+		copyEmail.Type = consts.EmailTypeReceive
+		copyEmail.Status = consts.EmailStatusWait
+		copyEmail.SendUserID = 0
+		copyEmail.Error = sql.NullString{}
+		if err := db.Transaction(db.Instance, func(session *xorm.Session) error {
+			if _, err := session.Insert(&copyEmail); err != nil {
+				return err
 			}
+			for _, user := range pending {
+				if _, err := session.Insert(&models.UserEmail{
+					UserID:  user.ID,
+					EmailID: copyEmail.Id,
+					Status:  consts.EmailStatusWait,
+					GroupId: 0,
+					IsRead:  0,
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			return fmt.Errorf("store local copy for %s: %w", address, err)
 		}
 	}
 	return nil
+}
+
+func localInboxCopyExists(userID int, msgID string) (bool, error) {
+	if msgID == "" {
+		return false, nil
+	}
+	var copies []models.Email
+	if err := db.Instance.Table("email").Where("type=? and msg_id=?", consts.EmailTypeReceive, msgID).Find(&copies); err != nil {
+		return false, err
+	}
+	for _, copyEmail := range copies {
+		exists, err := db.Instance.Table(&models.UserEmail{}).
+			Where("user_id=? and email_id=? and status=?", userID, copyEmail.Id, consts.EmailStatusWait).
+			Exist()
+		if err != nil {
+			return false, err
+		}
+		if exists {
+			return true, nil
+		}
+	}
+	return false, nil
 }

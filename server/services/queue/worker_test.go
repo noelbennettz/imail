@@ -474,8 +474,15 @@ func TestWorkerDeliversLocalRecipientWithoutMX(t *testing.T) {
 		t.Fatalf("Drain() = %d, want 1", processed)
 	}
 
+	var inbound models.Email
+	if _, err := engine.Where("type=? and msg_id=?", consts.EmailTypeReceive, email.MsgID).Get(&inbound); err != nil {
+		t.Fatal(err)
+	}
+	if inbound.Id == 0 {
+		t.Fatal("no inbound copy was stored")
+	}
 	var copy models.UserEmail
-	if _, err := engine.Where("user_id=? and email_id=?", local.ID, email.Id).Get(&copy); err != nil {
+	if _, err := engine.Where("user_id=? and email_id=?", local.ID, inbound.Id).Get(&copy); err != nil {
 		t.Fatal(err)
 	}
 	if copy.ID == 0 || copy.Status != consts.EmailStatusWait {
@@ -511,8 +518,16 @@ func TestWorkerKeepsAnInboxCopyWhenSendingToSelf(t *testing.T) {
 		t.Fatalf("Drain() = %d, want 1", processed)
 	}
 
+	var copies []models.Email
+	if err := engine.Where("msg_id=?", email.MsgID).Find(&copies); err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]int, 0, len(copies))
+	for _, copyEmail := range copies {
+		ids = append(ids, copyEmail.Id)
+	}
 	var relations []models.UserEmail
-	if err := engine.Where("user_id=? and email_id=?", sender.ID, email.Id).Asc("status").Find(&relations); err != nil {
+	if err := engine.Where("user_id=?", sender.ID).In("email_id", ids).Asc("status").Find(&relations); err != nil {
 		t.Fatal(err)
 	}
 	if len(relations) != 2 || relations[0].Status != consts.EmailStatusWait || relations[1].Status != consts.EmailStatusSent {

@@ -201,7 +201,7 @@ func (w *Worker) deliverEntry(ctx *context.Context, entry *models.EmailQueue, em
 	}
 	local, remote := splitQueueRecipients(recipients)
 	if len(local) > 0 {
-		if localErr := deliverLocal(ctx, email.Id, local); localErr != nil {
+		if localErr := deliverLocal(ctx, email, local); localErr != nil {
 			return localErr, map[string]error{"local": localErr}
 		}
 	}
