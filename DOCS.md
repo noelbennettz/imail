@@ -32,18 +32,20 @@ shortest install path; this file is the reference for everything else.
   465, **IMAPS** on 993, **POP3** on 110 (STLS required for authentication) and
   **POP3S** on 995.
 - **Dual-stack listeners**: `listenMode` can be `both`, `ipv4` or `ipv6`.
-  Outbound delivery follows `egressMode` (`both`, `ipv4` or `ipv6`); a
-  configured family the host does not have is detected at startup and the other
-  one is used instead.
-- **TLS 1.2 and TLS 1.3 only**, with strict SNI validation by default. A TLS
-  connection with no SNI or an unknown hostname is rejected during the
-  handshake. `serverHostnames` adds extra names when needed.
+  Outbound delivery follows `egressMode` (`both`, `ipv4` or `ipv6`). If you
+  configure a family the host does not have, iMail uses the other family and
+  logs a warning at startup.
+- **TLS 1.2 and TLS 1.3 only**, with strict SNI checking by default: a
+  connection with no SNI, or with a hostname the server does not know, is
+  rejected during the handshake. Add extra names with `serverHostnames`.
 - **Multiple domains and mailboxes**, with a primary domain, per-mailbox
   quotas, per-domain user administration and per-domain TLS.
-- **ACME certificates** with HTTP-01, manual DNS-01 TXT records, or automatic
-  DNS-01 through a Cloudflare API token. Certificates can also be uploaded.
-- **DKIM signing**, SPF checking, DMARC/PTR guidance and a configurable spam
-  filter level.
+- **ACME certificates** (for example Let's Encrypt) issued over HTTP-01 or
+  DNS-01, with manual TXT records or a Cloudflare API token. You can also upload
+  a certificate.
+- **DKIM signing**, SPF checking, DMARC/PTR guidance, and an optional rule that
+  drops mail for unknown recipients when SPF or DKIM fail (`spamFilterLevel`).
+  This setting does not score normal mail.
 - **Material 3 web UI**: light/dark/system themes, responsive mobile layout,
   search, conversation grouping, message view, reply, reply-all, forward and
   attachment download.
@@ -111,9 +113,9 @@ container and should be backed up: it contains the configuration, database,
 DKIM key and TLS certificates.
 
 Then open `http://<server-ip>/` and complete the setup wizard. Its first screen
-asks for the setup token printed in `docker compose logs imail`. The same ports
-are used by the Compose example; on rootless Docker publish high host ports
-instead (`-p 8080:80 -p 18443:443`, and so on).
+asks for the setup token, which is printed in `docker logs imail`. The same
+ports are used by the Compose example; on rootless Docker publish high host
+ports instead (`-p 8080:80 -p 18443:443`, and so on).
 
 ### Run with Docker Compose from GHCR
 
@@ -141,16 +143,17 @@ persistent and back it up.
 
 Open `http://<server-ip>/` and complete the wizard:
 
-1. **Setup token** — the server prints a one-time token at startup, in a banner
-   containing the line `Read it again with: docker compose logs imail`. Copy that
-   24-character token (letters and digits) into the first screen. The token is
-   generated only while the deployment is uninitialised, exists in memory only,
-   is never written to `config/`, and is discarded once setup succeeds. Every
-   wizard request carries it as the `X-Setup-Token` header. Missing or wrong
-   tokens get `403`; after five failures from one address, further attempts get
-   `429` for fifteen minutes. The limit is per address, so a stranger cannot
-   lock the administrator out of their own first setup. Only the static
-   client, `/api/ping` and a minimal status endpoint answer without a token.
+1. **Setup token** — the server prints a one-time, 24-character token (letters
+   and digits) at startup. Read it with `docker compose logs imail`, or
+   `docker logs imail` for a `docker run` deployment, and enter it on the first
+   screen. The token exists only while the deployment is uninitialised, is kept
+   in memory, is never written to `config/`, and is discarded once setup
+   succeeds. Every wizard request carries it as the `X-Setup-Token` header.
+   Missing or wrong tokens get `403`; after five failures from one address,
+   further attempts get `429` for fifteen minutes. The limit is per address, so
+   a stranger cannot lock the administrator out of their own first setup. Only
+   the static client, `/api/ping` and a minimal status endpoint answer without a
+   token.
 2. **Database** — SQLite is the default and works well for a small server.
    Choose MySQL or PostgreSQL if you already operate one.
 3. **Administrator** — choose an administrator account and a password of at
@@ -164,14 +167,12 @@ Open `http://<server-ip>/` and complete the wizard:
    certificate.
 
 After the wizard finishes, iMail restarts its listeners and the mailbox is
-available at the web domain. The setup wizard is only available before the
-first successful initialization; complete it promptly and do not expose a
-fresh, unconfigured instance to an untrusted network. The wizard itself is
-served over plain HTTP — it runs before a certificate exists — so the
-administrator password set in step 3 crosses the network in clear text; run the
-first setup from the machine's console, an SSH tunnel or a VPN, not over the
-public internet. The setup token closes the race with a stranger who reaches
-the port first; it does not encrypt anything in transit.
+available at the web domain. The wizard runs over plain HTTP because it finishes
+before a certificate exists, so the administrator password entered in step 3
+crosses the network in clear text. Run the first setup from the machine's
+console, an SSH tunnel or a VPN, and do not expose a fresh, unconfigured
+instance to the public internet. The setup token stops a stranger who reaches
+the port first from finishing setup; it does not encrypt anything in transit.
 
 ### First login
 
@@ -205,6 +206,11 @@ receive mail for.
 | `default._domainkey` | TXT | generated DKIM public key | Use the value from the wizard, not this text |
 | `_dmarc` | TXT | `v=DMARC1; p=quarantine; rua=mailto:postmaster@example.com` | DMARC |
 | reverse DNS / PTR | PTR | `smtp.example.com` | Set at the VPS or IP provider; cannot be set in normal domain DNS |
+
+SPF tells other servers which hosts may send mail for your domain. DKIM signs
+each message so receivers can check that it came from you and was not changed
+in transit. DMARC tells receivers what to do when SPF or DKIM fails. PTR lets
+receivers confirm that the sending IP belongs to your mail host.
 
 The setup wizard also shows the records for each additional domain. For
 multi-domain setups, each domain needs its own MX, SPF, DKIM and DMARC records
@@ -253,9 +259,9 @@ users submitting on 587), not by the internet. If your provider blocks inbound
 `listenMode` controls which sockets are bound: `both` (Go’s dual-stack
 wildcard), `ipv4` (`0.0.0.0`) or `ipv6` (`[::]`, IPv6-only). `egressMode`
 controls the family used for outbound SMTP delivery to MX hosts. In `both`
-mode the outbound connection uses Happy Eyeballs, so a destination that only
-publishes an AAAA record is reached over IPv6 and an A-only destination over
-IPv4.
+mode, iMail tries IPv6 first and falls back to IPv4 if IPv6 does not answer
+(Happy Eyeballs), so an AAAA-only destination is reached over IPv6 and an
+A-only destination over IPv4.
 
 IPv6-only and IPv4-only hosts are supported. If `config.json` requests a family
 the host cannot bind, the server falls back to the available family at startup
@@ -269,10 +275,11 @@ reported as a normal temporary delivery error and the next MX is tried.
 
 `httpsEnabled` controls the web listener:
 
-- `0` / `1` — HTTPS is enabled: the HTTPS listener starts on `httpsPort`
-  (default 443), and the HTTP listener on `httpPort` (default 80) answers only
-  `/api/ping` and `/.well-known/` for ACME HTTP-01, redirecting every other
-  request with `301` to `https://<webDomain><path>`.
+- `0` / `1` — HTTPS is enabled. `0` is the default and behaves the same as
+  `1`; both start the HTTPS listener on `httpsPort` (default 443), and the HTTP
+  listener on `httpPort` (default 80) answers only `/api/ping` and
+  `/.well-known/` for ACME HTTP-01, redirecting every other request with `301`
+  to `https://<webDomain><path>`.
 - `2` — HTTP-only mode: the HTTPS listener does not start and the HTTP listener
   serves the whole application. Use this behind a TLS reverse proxy or for local
   testing. The session cookie is not marked `Secure` in this mode; terminate
@@ -287,14 +294,12 @@ unless you fully understand the exposure.
 
 ## Delivery and retries
 
-iMail keeps a durable outbound queue for every outbound message, for all three
-submission paths: an SMTP client, the webmail compose window and a rule-based
-forward. The message is accepted (`250`, or a successful API response) once the
-message and its queue rows are committed, and a background worker delivers it
-from then on. Mailboxes this server hosts are queued too, so nothing depends on
-an inline delivery that a crash could lose: there is no window between the
-commit that acknowledges the message and the work that stores it in a local
-mailbox.
+iMail puts every outgoing message in a durable queue, whether it came from an
+SMTP client, the webmail compose window or a forwarding rule. It accepts the
+message (`250`, or a successful API response) only after the message and its
+queue rows are committed to the database; a background worker delivers it from
+there. Local mailbox delivery is queued the same way, so a crash cannot lose a
+message after the client has been told it was accepted.
 
 One queue row is written per **recipient**, not per message or per domain. A
 recipient a remote server already accepted is never contacted again while
@@ -309,9 +314,9 @@ another recipient is being retried, even when both are at the same domain.
   TLS). A 5xx answer from a remote server stops the attempt for that domain;
   anything else moves on to the next MX (RFC 5321 §5.1).
 - **Retries**: a temporary failure (network error, 4xx reply) is retried after
-  1 minute, 5 minutes, 15 minutes, 1 hour, 6 hours and then every 24 hours. An
-  entry is given up when the next attempt would fall outside 72 hours from
-  acceptance. A permanent 5xx reply fails the entry immediately.
+  1 minute, 5 minutes, 15 minutes, 1 hour, 6 hours and then every 24 hours.
+  iMail gives up when the next attempt would fall more than 72 hours after the
+  message was accepted. A permanent 5xx reply fails the entry immediately.
 - **Status**: the sent-folder row stays *delivery pending* while any queue row is
   waiting, becomes *sent* when every remote domain accepted the message, and
   *failed* (with the last error) when a domain finally gave up. Every attempt is
@@ -329,13 +334,14 @@ another recipient is being retried, even when both are at the same domain.
 - **Restart**: pending entries are stored in the database and the worker claims
   them again at startup, so a restart resumes delivery without any action. A row
   that was being delivered when the process stopped is retried after its lease
-  expires, which can deliver it twice in that single case (at-least-once).
+  expires, which can deliver it twice in that one case. Delivery is
+  at-least-once: a message may arrive twice, but it is not lost.
 - **One worker**: a single worker runs per process, and a row is claimed with a
   short lease in a conditional update, so two concurrent deliveries of the same
   row cannot happen.
 - **Local mailboxes** are queued like any other recipient, and the worker
-  delivers them through the same MX/loopback path. A crash after the commit can
-  therefore no longer lose the local copy.
+  delivers them through the same MX/loopback path. A crash after the commit
+  therefore cannot lose the local copy.
 - **Retry granularity is the recipient**: a partial success inside one domain is
   recorded exactly, and a retry only repeats the recipients that are still
   outstanding.
@@ -379,9 +385,9 @@ The mailbox supports:
 - Conversation pagination: five messages per page, then “Load more” or scroll
   to load the next page.
 - Per-message actions under the date: **View source** and **Delete this
-  message**. Source is the stored original MIME when the row has one (messages
-  received over SMTP); sent messages and rows without stored MIME use a
-  reconstructed header/body view.
+  message**. **View source** shows the stored original message, headers and body,
+  when iMail has it — which is the case for mail received over SMTP. For sent
+  messages and rows without stored data, it shows a reconstructed view.
 - Per-mailbox quota display and settings.
 
 Raw MIME is stored in the database for new SMTP messages so “View source” can
@@ -414,15 +420,15 @@ settings icon. The page is split into personal settings and administration.
 - **Security** — the server-wide protection switch. “Limit failed sign-ins” is
   on by default: five failed SMTP, IMAP or POP3 sign-ins within fifteen minutes
   refuse further attempts from the same source address for fifteen minutes.
-  Accounts are a second, deliberately weaker control: a mailbox is only blocked
-  when failures keep coming from several addresses (25 failures from at least
-  three distinct sources within fifteen minutes), so one attacker cannot lock
-  the owner out. The webmail and administrator logins are limited the same way.
+  A second, weaker limit applies to each account: a mailbox is blocked only when
+  failures keep coming from several addresses (25 failures from at least three
+  distinct sources within fifteen minutes), so one attacker cannot lock the
+  owner out. The webmail and administrator logins are limited the same way.
   The switch is applied immediately, without a restart, and is saved in
-  `config.json`. The same page shows the **outbox**: how many
-  outbound messages are waiting for delivery to other servers and how many have
-  finally failed, lists the queued rows and can retry a failed one or delete a
-  finished one; the queue itself drains automatically.
+  `config.json`. The same page shows the **outbox**: how many outbound messages
+  are waiting for delivery to other servers and how many have finally failed,
+  lists the queued rows and can retry a failed one or delete a finished one; the
+  queue itself drains automatically.
 - **Domains** — add or remove configured domains. A domain with users cannot be
   removed, and the primary domain cannot be removed. Removing a domain triggers
   a listener reload.
@@ -524,6 +530,9 @@ Notes:
   the `-p` flag). Every other setting lives in `config.json`.
 - `dnsApiToken` is a secret. It is redacted from startup logs, but it remains
   in `config.json`; protect that file and never commit it.
+- `spamFilterLevel` only decides what happens to mail for unknown recipients:
+  when the configured SPF/DKIM condition fails, iMail drops that mail instead of
+  handing it to an administrator. It does not score mail for existing mailboxes.
 - `domainCertificates` stores per-domain mode/provider/token metadata. Use the
   Domains page rather than editing it by hand.
 - MySQL and PostgreSQL take the connection string in `dbDSN` and the driver name
@@ -539,7 +548,7 @@ Notes:
 
 ## Docker and operations
 
-The included Compose file runs one container and mounts `./config`:
+The Compose files run one container and mount `./config`:
 
 `docker-compose.yml` builds the image locally. `docker-compose.ghcr.yml` is the
 same deployment but pulls `ghcr.io/noelbennettz/imail:latest` instead; use the
@@ -582,12 +591,11 @@ The application stores everything it needs under `/work/config`: the JSON
 configuration, SQLite database, DKIM key and TLS material. Keep that volume on
 persistent storage.
 
-The container health check calls `/api/ping`. While the HTTP listener answers,
-the endpoint returns HTTP 200 with `{"data":"pong"}` — during setup as well as
-after it, because the health check runs before the wizard is finished. A passing
-probe therefore only shows that the HTTP listener responded. If the container is
-healthy but mail is not working, check the mail listener logs and the host
-firewall separately.
+The container health check calls `/api/ping`, which returns HTTP 200 with
+`{"data":"pong"}` whenever the HTTP listener is up — including during setup,
+before the wizard is finished. A passing probe therefore only proves that the
+HTTP listener answered. If the container is healthy but mail is not working,
+check the mail listener logs and the host firewall.
 
 `TZ` changes neither log lines nor stored timestamps: iMail sets the process
 local zone to UTC, and the browser renders dates in the device's local time.
@@ -648,13 +656,16 @@ workflow. Publishing a tag (`v1.0.0`) starts the Release workflow instead, which
 - builds `linux/amd64` and `linux/arm64` and pushes the version tags
   (`1.0.0`, `1.0`, `sha-<commit>`) to the same package;
 - signs the image digest with **cosign keyless**, using the workflow's GitHub
-  OIDC identity, so there is no key to manage or leak;
-- generates an **SPDX** SBOM with a pinned syft, attests it to the image and
-  attaches it to the GitHub release.
+  OIDC identity, so there is no private signing key to manage or leak;
+- generates an **SPDX** SBOM (a list of the packages inside the image) with a
+  pinned syft, attaches it to the image as a signed attestation, and uploads it
+  to the GitHub release.
 
-The Dockerfile pins its base images (`node`, `golang`, `alpine`) by manifest
-list digest. Updating them is a visible change in the diff; run
-`docker buildx imagetools inspect <image>:<tag>` and replace the digest.
+Keyless signing means GitHub's OIDC identity vouches for the workflow that built
+the image; there is no long-lived key in the repository. The Dockerfile pins its
+base images (`node`, `golang`, `alpine`) by digest, which is an exact image
+version rather than a moving tag. Updating them is a visible change in the diff;
+run `docker buildx imagetools inspect <image>:<tag>` and replace the digest.
 
 Verify a release before deploying it:
 

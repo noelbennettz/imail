@@ -17,13 +17,14 @@ up `config/` before you upgrade.
 [![Container image](https://img.shields.io/badge/ghcr.io-imail-blue?logo=github)](https://github.com/noelbennettz/imail/pkgs/container/imail)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue)](LICENSE)
 
-iMail serves SMTP, submission, SMTPS, IMAPS, POP3 and POP3S for one or more
-domains you control, and ships a Material 3 web mailbox and administration
-console from a single Go binary with the Vue 3 client embedded, so production
-needs no nginx, PHP, Node runtime or external asset CDN. It keeps all state —
-configuration, SQLite database, DKIM key and TLS certificates — in one `config/`
-volume, which makes a backup a directory copy; MySQL and PostgreSQL are
-supported for larger deployments. iMail is licensed under AGPL-3.0.
+iMail is a mail server for one or more domains you control. It handles SMTP,
+submission, SMTPS, IMAPS, POP3 and POP3S, and serves a Material 3 web mailbox
+and administration console from a single Go binary with the Vue 3 client
+embedded. A production deployment needs no nginx, PHP, Node.js runtime or
+external asset CDN. Configuration, the SQLite database, the DKIM key and TLS
+certificates all live in one `config/` directory, so a backup is a directory
+copy. MySQL and PostgreSQL are supported for larger deployments. iMail is
+licensed under AGPL-3.0.
 
 ## Requirements
 
@@ -69,23 +70,21 @@ docker compose logs -f imail
 
 Open `http://<server-ip>/` and complete the setup wizard (database,
 administrator, domains, DNS records, TLS). The first screen asks for the setup
-token: the server prints it at startup, in a banner that contains the line
-`Read it again with: docker compose logs imail`. Copy the 24-character token
-from `docker compose logs imail` into that screen; every later wizard request
-carries it as the `X-Setup-Token` header. The token is generated only while the
-deployment is uninitialised, lives in memory, never touches `config/`, and is
-discarded when setup finishes.
+token: the server prints a 24-character token at startup. Read it with
+`docker compose logs imail`, or `docker logs imail` if you used `docker run`.
+The token lives in memory, is never written to `config/`, and is discarded when
+setup finishes.
 
-The wizard exists only before the first successful initialization, so finish it
-on a trusted network. It is served over plain HTTP — TLS is configured at the
-end of it — so the token stops a stranger from completing setup first, but it
-does not encrypt the administrator password on the wire; use an SSH tunnel, a
-VPN, or the machine's console for the first run.
+The wizard only exists until the first successful setup, and it is served over
+plain HTTP because TLS is configured at the end. Finish it from a trusted
+network — over an SSH tunnel, a VPN, or the machine's console. The token stops
+someone else from completing setup first, but it does not encrypt the
+administrator password in transit.
 
-Check it came up: `docker compose ps` shows `Up … (healthy)` after the
-45-second start period, `curl -s http://127.0.0.1/api/ping` answers
-`{"errorNo":0,"errorMsg":"","data":"pong"}`, and the browser shows the setup
-wizard (or the login page once it is finished).
+Check it came up: `docker compose ps` should show `Up … (healthy)` after the
+45-second start period, `curl -s http://127.0.0.1/api/ping` should answer
+`{"errorNo":0,"errorMsg":"","data":"pong"}`, and the browser should show the
+setup wizard (or the login page once setup is finished).
 
 Removing it later: `docker compose down` removes the container and keeps
 `./config`; `docker compose down -v` also removes named volumes — with the

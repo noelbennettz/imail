@@ -3,7 +3,7 @@
 iMail is a self-hosted mail server: it speaks SMTP, submission, SMTPS, IMAP,
 POP3 and POP3S, serves a web mailbox and an administration console from one Go
 binary, and keeps configuration, database, DKIM key and TLS material in a single
-`config/` volume. That combination is worth attacking, and reports are welcome.
+`config/` volume. That makes it a worthwhile target, and reports are welcome.
 
 ## Supported versions
 
