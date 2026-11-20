@@ -1,0 +1,56 @@
+# Dependabot keeps the parts this project does not write itself current: the
+# actions every workflow pins by commit, the Go modules of the server, the
+# packages the front end builds against and the images the Dockerfile builds
+# from. A pin is only useful if something moves it, and moving it by hand is
+# what gets forgotten.
+#
+# Each pull request it opens gets the usual CI. The actions are pinned by full
+# SHA on purpose - Dependabot updates the SHA and keeps the `# vN` comment, so a
+# reviewer still sees the release the commit belongs to.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The server vendors its dependencies, so a bump here also touches
+  # server/vendor/; CI builds it before anything is merged.
+  - package-ecosystem: gomod
+    directory: /server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      go:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /fe
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+    groups:
+      frontend:
+        patterns: ["*"]
+
+  # The base images are pinned by tag and digest; this is what moves the digest
+  # when upstream rebuilds a release, and what raises the tag when a new Alpine,
+  # Node or Go minor is out.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: docker
