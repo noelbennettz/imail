@@ -72,7 +72,7 @@ func RenameByPath(ctx *context.Context, oldPath, newPath string) error {
 	if oldPath == "" || newPath == "" {
 		return errors2.New("mailbox name is required")
 	}
-	if len([]rune(oldPath)) > 512 || len([]rune(newPath)) > 512 || len([]rune(pathLeaf(newPath))) > 255 {
+	if len([]rune(oldPath)) > 600 || len([]rune(newPath)) > 600 || len([]rune(pathLeaf(newPath))) > 255 {
 		return errors2.New("mailbox name is too long")
 	}
 	oldGroup, err := ResolveBox(ctx, oldPath)

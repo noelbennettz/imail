@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
@@ -61,7 +62,11 @@ func dkimPublicValue(signer crypto.Signer) (string, error) {
 	}, "; "), nil
 }
 
+var dkimGenMu sync.Mutex
+
 func DkimGen() string {
+	dkimGenMu.Lock()
+	defer dkimGenMu.Unlock()
 	privatePath := config.Instance.DkimPrivateKeyPath
 	if strings.TrimSpace(privatePath) == "" {
 		privatePath = filepath.Join(config.ROOT_PATH, "config", "dkim", "dkim.priv")

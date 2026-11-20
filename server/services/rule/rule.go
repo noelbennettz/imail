@@ -186,25 +186,13 @@ func doMove(ctx *context.Context, rule *dto.Rule, email *parsemail.Email, user *
 	groupId := cast.ToInt(rule.Params)
 	switch groupId {
 	case models.INBOX:
-		_, err := db.Instance.Table(&models.Email{}).Where("id=?", email.MessageId).
-			Cols("type").Update(map[string]interface{}{"type": consts.EmailTypeReceive})
-		if err != nil {
-			log.WithContext(ctx).Errorf("sqlERror :%v", err)
-		}
-
-		_, err = db.Instance.Table(&models.UserEmail{}).Where("email_id=? and user_id=?", email.MessageId, rule.UserId).
+		_, err := db.Instance.Table(&models.UserEmail{}).Where("email_id=? and user_id=?", email.MessageId, rule.UserId).
 			Cols("group_id", "status").Update(map[string]interface{}{"group_id": 0, "status": 0})
 		if err != nil {
 			log.WithContext(ctx).Errorf("sqlERror :%v", err)
 		}
 	case models.Sent:
-		_, err := db.Instance.Table(&models.Email{}).Where("id=?", email.MessageId).
-			Cols("type").Update(map[string]interface{}{"type": consts.EmailTypeSend})
-		if err != nil {
-			log.WithContext(ctx).Errorf("sqlERror :%v", err)
-		}
-
-		_, err = db.Instance.Table(&models.UserEmail{}).Where("email_id=? and user_id=?", email.MessageId, rule.UserId).
+		_, err := db.Instance.Table(&models.UserEmail{}).Where("email_id=? and user_id=?", email.MessageId, rule.UserId).
 			Cols("group_id", "status").Update(map[string]interface{}{"group_id": 0, "status": consts.EmailStatusSent})
 		if err != nil {
 			log.WithContext(ctx).Errorf("sqlERror :%v", err)

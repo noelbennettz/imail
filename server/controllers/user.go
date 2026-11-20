@@ -105,10 +105,10 @@ func CreateUser(ctx *context.Context, w http.ResponseWriter, req *http.Request) 
 		user.Quota = config.Instance.DefaultQuotaBytes()
 	}
 
-	if found, err := db.Instance.Table("user").Where("account=?", reqData.Account).Exist(); err != nil {
+	if count, err := db.Instance.Table(&models.User{}).Where("account=?", reqData.Account).Count(); err != nil {
 		response.NewErrorResponse(response.ServerError, err.Error(), "").FPrint(w)
 		return
-	} else if found {
+	} else if count > 0 {
 		response.NewErrorResponse(response.ParamsError, "Account already exists", "").FPrint(w)
 		return
 	}

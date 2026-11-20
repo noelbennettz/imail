@@ -99,8 +99,11 @@ func genSQL(ctx *context.Context, count bool, tagInfo dto.SearchTag, keyword str
 		sql += " and type =? "
 		sqlParams = append(sqlParams, tagInfo.Type)
 	} else if tagInfo.Type == consts.EmailTypeSend {
-		sql += " and (type =? or ue.group_id=?)"
-		sqlParams = append(sqlParams, tagInfo.Type, models.Sent)
+		// The Sent view also contains messages moved there from another
+		// folder; those keep the received email.type and only change the
+		// user_email status.
+		sql += " and (type =? or ue.status=? or ue.group_id=?)"
+		sqlParams = append(sqlParams, tagInfo.Type, consts.EmailStatusSent, models.Sent)
 	}
 
 	if tagInfo.GroupId != -1 {

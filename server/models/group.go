@@ -5,7 +5,7 @@ type Group struct {
 	Name     string `xorm:"varchar(255) notnull default('') comment('group name')" json:"name"`
 	ParentId int    `xorm:"parent_id int unsigned notnull default(0) comment('parent group name')" json:"parent_id"`
 	UserId   int    `xorm:"user_id int unsigned notnull default(0) comment('user id')" json:"-"`
-	FullPath string `xorm:"full_path varchar(512) comment('full path')" json:"full_path"`
+	FullPath string `xorm:"full_path varchar(600) comment('full path')" json:"full_path"`
 }
 
 const (
