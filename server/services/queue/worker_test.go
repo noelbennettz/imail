@@ -518,19 +518,25 @@ func TestWorkerKeepsAnInboxCopyWhenSendingToSelf(t *testing.T) {
 		t.Fatalf("Drain() = %d, want 1", processed)
 	}
 
-	var copies []models.Email
-	if err := engine.Where("msg_id=?", email.MsgID).Find(&copies); err != nil {
+	var inbound models.Email
+	if _, err := engine.Where("type=? and msg_id=?", consts.EmailTypeReceive, email.MsgID).Get(&inbound); err != nil {
 		t.Fatal(err)
 	}
-	ids := make([]int, 0, len(copies))
-	for _, copyEmail := range copies {
-		ids = append(ids, copyEmail.Id)
+	if inbound.Id == 0 {
+		t.Fatal("no inbound copy was stored for the self-send")
 	}
-	var relations []models.UserEmail
-	if err := engine.Where("user_id=?", sender.ID).In("email_id", ids).Asc("status").Find(&relations); err != nil {
+	var inbox models.UserEmail
+	if _, err := engine.Where("user_id=? and email_id=?", sender.ID, inbound.Id).Get(&inbox); err != nil {
 		t.Fatal(err)
 	}
-	if len(relations) != 2 || relations[0].Status != consts.EmailStatusWait || relations[1].Status != consts.EmailStatusSent {
-		t.Fatalf("self-send relations = %+v, want an Inbox copy and the Sent copy", relations)
+	if inbox.ID == 0 || inbox.Status != consts.EmailStatusWait {
+		t.Fatalf("self-send inbox relation = %+v", inbox)
+	}
+	var sent models.UserEmail
+	if _, err := engine.Where("user_id=? and email_id=?", 1, email.Id).Get(&sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent.Status != consts.EmailStatusSent {
+		t.Fatalf("self-send sent relation = %+v, want sent", sent)
 	}
 }
