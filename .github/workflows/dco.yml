@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: dco-${{ github.event.pull_request.number }}
@@ -25,6 +26,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
+      - name: Keep only the newest three runs
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/prune-runs.sh 3
+
       - name: Check the sign-off of every commit
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -35,3 +42,10 @@ jobs:
           git cat-file -e "${BASE_SHA}^{commit}"
           git cat-file -e "${HEAD_SHA}^{commit}"
           bash scripts/check-dco.sh "${BASE_SHA}" "${HEAD_SHA}"
+
+      - name: Keep only the newest three runs (final)
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/prune-runs.sh 3

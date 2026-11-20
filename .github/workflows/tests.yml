@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: tests-${{ github.ref }}
@@ -27,6 +28,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Keep only the newest three runs
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/prune-runs.sh 3
+
 
       - name: Set up Go
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
@@ -146,3 +154,10 @@ jobs:
           IMAIL_TEST_DB: ${{ matrix.backend }}
           IMAIL_TEST_DSN: ${{ matrix.dsn }}
         run: go test -p 1 ./services/queue/ ./controllers/email/
+
+      - name: Keep only the newest three runs (final)
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/prune-runs.sh 3
