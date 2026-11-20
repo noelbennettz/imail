@@ -97,19 +97,18 @@ from npm at build time and are not vendored here. The versions are the ones
 
 | Package | Version | Licence |
 | --- | --- | --- |
-| `@element-plus/icons-vue` | 2.3.1 | MIT |
+| `@element-plus/icons-vue` | 2.3.2 | MIT |
 | `@wangeditor/editor` | 5.1.23 | MIT |
 | `@wangeditor/editor-for-vue` | 5.1.12 | MIT |
-| `axios` | 1.8.4 | MIT |
-| `element-plus` | 2.9.7 | MIT |
-| `pinia` | 2.3.1 | MIT |
-| `vue` | 3.5.13 | MIT |
-| `vue-icons-plus` | 0.1.8 | MIT |
-| `vue-router` | 4.5.0 | MIT |
+| `axios` | 1.21.1 | MIT |
+| `element-plus` | 2.14.8 | MIT |
+| `pinia` | 4.1.0 | MIT |
+| `vue` | 3.5.45 | MIT |
+| `vue-icons-plus` | 0.1.9 | MIT |
+| `vue-router` | 5.5.1 | MIT |
 
-The transitive production dependencies — 126 packages at the time of writing,
-MIT, ISC, BSD-2-Clause and BSD-3-Clause — are covered by the same check rather
-than listed one by one.
+The transitive production dependencies — MIT, ISC, BSD-2-Clause and BSD-3-Clause
+— are covered by the same check rather than listed one by one.
 
 `fe/src/assets/fonts/` carries the Inter webfont under the **SIL Open Font
 License 1.1**; the licence text is `fe/src/assets/fonts/OFL.txt`.
@@ -126,7 +125,7 @@ License 1.1**; the licence text is `fe/src/assets/fonts/OFL.txt`.
 
 ## Container base image and system packages
 
-The runtime image is `alpine:3.21` plus the packages `apk add` installs in the
+The runtime image is `alpine:3.24` plus the packages `apk add` installs in the
 `Dockerfile` and their dependencies. They are separate programs in the same
 image, not linked into the iMail binary: the Go build is static
 (`CGO_ENABLED=0`) and links only the modules listed above, and the Go client is
@@ -136,26 +135,26 @@ Alpine does not install the licence texts — they are in the package sources at
 below.
 
 Versions are the ones `apk` resolved when this file was last updated; the
-licence column is the `L:` field of the Alpine package index for v3.21.
+licence column is the `L:` field of the Alpine package index for v3.24.
 
 | Package | Version | Licence | Upstream |
 | --- | --- | --- | --- |
-| `alpine-baselayout`, `alpine-baselayout-data` | 3.6.8-r1 | GPL-2.0-only | <https://git.alpinelinux.org/aports/tree/main/alpine-baselayout> |
-| `alpine-keys` | 2.5-r0 | MIT | <https://alpinelinux.org> |
-| `alpine-release` | 3.21.10-r0 | MIT | <https://alpinelinux.org> |
-| `apk-tools` | 2.14.13-r0 | GPL-2.0-only | <https://gitlab.alpinelinux.org/alpine/apk-tools> |
-| `busybox`, `busybox-binsh` | 1.37.0-r14 | GPL-2.0-only | <https://busybox.net/> |
+| `alpine-baselayout`, `alpine-baselayout-data` | 3.7.2-r1 | GPL-2.0-only | <https://git.alpinelinux.org/aports/tree/main/alpine-baselayout> |
+| `alpine-keys` | 2.6-r0 | MIT | <https://alpinelinux.org> |
+| `alpine-release` | 3.24.4-r0 | MIT | <https://alpinelinux.org> |
+| `apk-tools` | 3.0.9-r0 | GPL-2.0-only | <https://gitlab.alpinelinux.org/alpine/apk-tools> |
+| `busybox`, `busybox-binsh` | 1.37.0-r31 | GPL-2.0-only | <https://busybox.net/> |
 | `ca-certificates`, `ca-certificates-bundle` | 20261020-r0 | MPL-2.0 AND MIT | <https://www.mozilla.org/en-US/about/governance/policies/security-group/certs/> |
-| `libcrypto3`, `libssl3`, `openssl` | 3.3.7-r2 | Apache-2.0 | <https://www.openssl.org/> |
-| `libidn2` | 2.3.7-r0 | GPL-2.0-or-later OR LGPL-3.0-or-later | <https://www.gnu.org/software/libidn#libidn2> |
-| `libunistring` | 1.2-r0 | GPL-2.0-or-later OR LGPL-3.0-or-later | <https://www.gnu.org/software/libunistring/> |
-| `musl` | 1.2.5-r12 | MIT | <https://musl.libc.org/> |
-| `musl-utils` | 1.2.5-r12 | MIT AND BSD-2-Clause AND GPL-2.0-or-later | <https://musl.libc.org/> |
-| `pcre2` | 10.43-r1 | BSD-3-Clause | <https://pcre.org/> |
-| `scanelf` | 1.3.8-r1 | GPL-2.0-only | <https://wiki.gentoo.org/wiki/Hardened/PaX_Utilities> |
-| `ssl_client` | 1.37.0-r14 | GPL-2.0-only | <https://busybox.net/> |
+| `libcrypto3`, `libssl3`, `openssl` | 3.5.9-r1 | Apache-2.0 | <https://www.openssl.org/> |
+| `libidn2` | 2.3.8-r0 | GPL-2.0-or-later OR LGPL-3.0-or-later | <https://www.gnu.org/software/libidn#libidn2> |
+| `libunistring` | 1.4.2-r0 | GPL-2.0-or-later OR LGPL-3.0-or-later | <https://www.gnu.org/software/libunistring/> |
+| `musl` | 1.2.6-r3 | MIT | <https://musl.libc.org/> |
+| `musl-utils` | 1.2.6-r3 | MIT AND BSD-2-Clause AND GPL-2.0-or-later | <https://musl.libc.org/> |
+| `pcre2` | 10.49-r0 | BSD-3-Clause | <https://pcre.org/> |
+| `scanelf` | 1.3.9-r1 | GPL-2.0-only | <https://wiki.gentoo.org/wiki/Hardened/PaX_Utilities> |
+| `ssl_client` | 1.37.0-r31 | GPL-2.0-only | <https://busybox.net/> |
 | `tzdata` | 2026f-r0 | Public-Domain | <https://www.iana.org/time-zones> |
-| `wget` | 1.25.0-r0 | GPL-3.0-or-later WITH OpenSSL-Exception | <https://www.gnu.org/software/wget/wget.html> |
+| `wget` | 1.25.0-r3 | GPL-3.0-or-later WITH OpenSSL-Exception | <https://www.gnu.org/software/wget/wget.html> |
 | `zlib` | 1.4-r0 | Zlib | <https://zlib.net/> |
 
 Nothing here is GPL-2.0-only code linked into the iMail program: `busybox`,
