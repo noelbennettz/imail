@@ -6,6 +6,9 @@ ARG BUILDPLATFORM
 #   docker buildx imagetools inspect <image>:<tag>
 # and replace the digest.
 FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS febuild
+# Node 26 images no longer ship a global yarn; install the same Yarn 1.22.22
+# the CI uses before copying the lockfile and running the build.
+RUN npm install --global yarn@1.22.22
 WORKDIR /work
 
 COPY fe .
