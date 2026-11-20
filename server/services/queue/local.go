@@ -42,7 +42,7 @@ func splitQueueRecipients(recipients []string) (local, remote []string) {
 	return local, remoteAddresses
 }
 
-func localRecipient(address string) (*models.User, error) {
+func localRecipients(address string) ([]*models.User, error) {
 	account, domain, found := strings.Cut(strings.TrimSpace(address), "@")
 	if !found || account == "" || domain == "" {
 		return nil, &textproto.Error{Code: 550, Msg: "invalid local recipient"}
@@ -60,18 +60,25 @@ func localRecipient(address string) (*models.User, error) {
 
 	var user models.User
 	found, err := db.Instance.Table(&models.User{}).
-		Where("LOWER(account)=LOWER(?) and disabled=0", account).
+		Where("LOWER(account)=LOWER(?)", account).
 		Get(&user)
 	if err != nil {
 		return nil, err
 	}
-	if !found {
+	if found && (user.Domain == "" || strings.EqualFold(user.Domain, domain)) {
+		return []*models.User{&user}, nil
+	}
+
+	// Mirror inbound delivery: an address that has no mailbox is handed to the
+	// administrators instead of being silently dropped.
+	var admins []*models.User
+	if err := db.Instance.Table(&models.User{}).Where("is_admin=1").Find(&admins); err != nil {
+		return nil, err
+	}
+	if len(admins) == 0 {
 		return nil, &textproto.Error{Code: 550, Msg: "recipient not found"}
 	}
-	if user.Domain != "" && !strings.EqualFold(user.Domain, domain) {
-		return nil, &textproto.Error{Code: 550, Msg: "recipient not found in this domain"}
-	}
-	return &user, nil
+	return admins, nil
 }
 
 // deliverLocal inserts the mailbox relation for every local recipient. The
@@ -79,27 +86,29 @@ func localRecipient(address string) (*models.User, error) {
 // left alone.
 func deliverLocal(ctx *context.Context, emailID int, recipients []string) error {
 	for _, address := range recipients {
-		user, err := localRecipient(address)
+		users, err := localRecipients(address)
 		if err != nil {
 			return err
 		}
-		exists, err := db.Instance.Table(&models.UserEmail{}).
-			Where("email_id=? and user_id=? and status=?", emailID, user.ID, consts.EmailStatusWait).
-			Exist()
-		if err != nil {
-			return err
-		}
-		if exists {
-			continue
-		}
-		if _, err := db.Instance.Insert(&models.UserEmail{
-			UserID:  user.ID,
-			EmailID: emailID,
-			Status:  consts.EmailStatusWait,
-			GroupId: 0,
-			IsRead:  0,
-		}); err != nil {
-			return fmt.Errorf("store local copy for %s: %w", address, err)
+		for _, user := range users {
+			exists, err := db.Instance.Table(&models.UserEmail{}).
+				Where("email_id=? and user_id=? and status=?", emailID, user.ID, consts.EmailStatusWait).
+				Exist()
+			if err != nil {
+				return err
+			}
+			if exists {
+				continue
+			}
+			if _, err := db.Instance.Insert(&models.UserEmail{
+				UserID:  user.ID,
+				EmailID: emailID,
+				Status:  consts.EmailStatusWait,
+				GroupId: 0,
+				IsRead:  0,
+			}); err != nil {
+				return fmt.Errorf("store local copy for %s: %w", address, err)
+			}
 		}
 	}
 	return nil
