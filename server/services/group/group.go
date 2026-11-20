@@ -112,7 +112,7 @@ func RenameByPath(ctx *context.Context, oldPath, newPath string) error {
 		return errors.Wrap(err)
 	}
 	defer trans.Rollback()
-	if _, err := trans.ID(oldGroup.ID).Update(oldGroup); err != nil {
+	if _, err := trans.ID(oldGroup.ID).Cols("name", "parent_id", "full_path").Update(oldGroup); err != nil {
 		return errors.Wrap(err)
 	}
 	var descendants []models.Group
