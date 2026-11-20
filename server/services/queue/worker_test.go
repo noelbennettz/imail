@@ -492,3 +492,30 @@ func TestWorkerDeliversLocalRecipientWithoutMX(t *testing.T) {
 		t.Fatalf("queue state = %d, want delivered", got.State)
 	}
 }
+
+func TestWorkerKeepsAnInboxCopyWhenSendingToSelf(t *testing.T) {
+	engine, _ := newTestEngine(t)
+	email := insertEmail(t, engine, "self@example.com")
+	if _, err := engine.ID(email.Id).Cols("send_user_id").Update(&models.Email{SendUserID: 1}); err != nil {
+		t.Fatal(err)
+	}
+	sender := models.User{Account: "self", Name: "Self", Domain: "example.com"}
+	if _, err := engine.Insert(&sender); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
+	enqueueAt(t, engine, email, now, "self@example.com")
+
+	worker := newTestWorker(func() time.Time { return now })
+	if processed := worker.Drain(); processed != 1 {
+		t.Fatalf("Drain() = %d, want 1", processed)
+	}
+
+	var relations []models.UserEmail
+	if err := engine.Where("user_id=? and email_id=?", sender.ID, email.Id).Asc("status").Find(&relations); err != nil {
+		t.Fatal(err)
+	}
+	if len(relations) != 2 || relations[0].Status != consts.EmailStatusWait || relations[1].Status != consts.EmailStatusSent {
+		t.Fatalf("self-send relations = %+v, want an Inbox copy and the Sent copy", relations)
+	}
+}
