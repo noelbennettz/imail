@@ -15,24 +15,23 @@ import (
 func (s *serverSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, error) {
 	var emailList []*response.EmailResponseData
 
-	switch numSet.(type) {
+	switch set := numSet.(type) {
 	case imap.SeqSet:
-		seqSet := numSet.(imap.SeqSet)
-		for _, seq := range seqSet {
-			emailList = list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{
+		for _, seq := range set {
+			emailList = append(emailList, list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{
 				Star: cast.ToInt(seq.Start),
 				End:  cast.ToInt(seq.Stop),
-			}, false)
+			}, false)...)
 		}
 	case imap.UIDSet:
-		uidSet := numSet.(imap.UIDSet)
-		for _, uid := range uidSet {
-			emailList = list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{
+		for _, uid := range set {
+			emailList = append(emailList, list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{
 				Star: cast.ToInt(uint32(uid.Start)),
 				End:  cast.ToInt(uint32(uid.Stop)),
-			}, true)
+			}, true)...)
 		}
 	}
+	emailList = uniqueEmailList(emailList)
 
 	if len(emailList) == 0 {
 		return nil, &imap.Error{
@@ -41,13 +40,18 @@ func (s *serverSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, e
 		}
 	}
 
-	var err error
-	destUid := []int{}
-	UIDValidity := 0
+	var (
+		err         error
+		destUid     []int
+		UIDValidity int
+	)
 	if group.IsDefaultBox(dest) {
 		UIDValidity, destUid, err = copy2defaultbox(s.ctx, emailList, dest)
 	} else {
 		UIDValidity, destUid, err = copy2userbox(s.ctx, emailList, dest)
+	}
+	if err != nil {
+		return nil, err
 	}
 	data := imap.CopyData{}
 	data.UIDValidity = cast.ToUint32(UIDValidity)
@@ -61,7 +65,23 @@ func (s *serverSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, e
 		data.SourceUIDs = append(data.SourceUIDs, imap.UIDRange{Start: imap.UID(cast.ToUint32(email.UeId)), Stop: imap.UID(cast.ToUint32(email.UeId))})
 	}
 
-	return &data, err
+	return &data, nil
+}
+
+func uniqueEmailList(in []*response.EmailResponseData) []*response.EmailResponseData {
+	seen := map[int]struct{}{}
+	out := make([]*response.EmailResponseData, 0, len(in))
+	for _, email := range in {
+		if email == nil {
+			continue
+		}
+		if _, duplicate := seen[email.UeId]; duplicate {
+			continue
+		}
+		seen[email.UeId] = struct{}{}
+		out = append(out, email)
+	}
+	return out
 }
 
 func copy2defaultbox(ctx *context.Context, mails []*response.EmailResponseData, dest string) (int, []int, error) {
@@ -86,7 +106,9 @@ func copy2defaultbox(ctx *context.Context, mails []*response.EmailResponseData, 
 		case "Junk":
 			newUe.Status = consts.EmailStatusJunk
 		}
-		db.Instance.Insert(&newUe)
+		if _, err := db.Instance.Insert(&newUe); err != nil {
+			return 0, nil, err
+		}
 		destUid = append(destUid, newUe.ID)
 	}
 
@@ -116,7 +138,9 @@ func copy2userbox(ctx *context.Context, mails []*response.EmailResponseData, des
 			GroupId: groupInfo.ID,
 			Status:  email.Status,
 		}
-		db.Instance.Insert(&newUe)
+		if _, err := db.Instance.Insert(&newUe); err != nil {
+			return 0, nil, err
+		}
 		destUid = append(destUid, newUe.ID)
 	}
 

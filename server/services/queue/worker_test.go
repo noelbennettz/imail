@@ -452,3 +452,43 @@ func TestFinalStatusWaitsForEveryDomain(t *testing.T) {
 		t.Fatalf("error = %q, want the failing domain reason", stored.Error.String)
 	}
 }
+
+func TestWorkerDeliversLocalRecipientWithoutMX(t *testing.T) {
+	engine, _ := newTestEngine(t)
+	email := insertEmail(t, engine, "local@example.com")
+	if _, err := engine.ID(email.Id).Cols("send_user_id").Update(&models.Email{SendUserID: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Insert(&models.User{Account: "sender", Name: "Sender"}); err != nil {
+		t.Fatal(err)
+	}
+	local := models.User{Account: "local", Name: "local", Domain: "example.com"}
+	if _, err := engine.Insert(&local); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
+	entry := enqueueAt(t, engine, email, now, "local@example.com")
+
+	worker := newTestWorker(func() time.Time { return now })
+	if processed := worker.Drain(); processed != 1 {
+		t.Fatalf("Drain() = %d, want 1", processed)
+	}
+
+	var copy models.UserEmail
+	if _, err := engine.Where("user_id=? and email_id=?", local.ID, email.Id).Get(&copy); err != nil {
+		t.Fatal(err)
+	}
+	if copy.ID == 0 || copy.Status != consts.EmailStatusWait {
+		t.Fatalf("local copy = %+v, want an unread inbox relation", copy)
+	}
+	var sender models.UserEmail
+	if _, err := engine.Where("user_id=? and email_id=?", 1, email.Id).Get(&sender); err != nil {
+		t.Fatal(err)
+	}
+	if sender.Status != consts.EmailStatusSent {
+		t.Fatalf("sender status = %d, want sent", sender.Status)
+	}
+	if got := loadEntry(t, engine, entry.Id); got.State != models.EmailQueueDelivered {
+		t.Fatalf("queue state = %d, want delivered", got.State)
+	}
+}

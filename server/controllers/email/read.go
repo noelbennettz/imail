@@ -32,12 +32,10 @@ func MarkRead(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 	}
 
 	for _, id := range reqData.IDs {
-		detail.GetEmailDetail(ctx, id, true)
-	}
-
-	if err != nil {
-		response.NewErrorResponse(response.ServerError, err.Error(), "").FPrint(w)
-		return
+		if _, err := detail.GetEmailDetail(ctx, id, true); err != nil {
+			response.NewErrorResponse(response.ServerError, err.Error(), "").FPrint(w)
+			return
+		}
 	}
 	response.NewSuccessResponse("success").FPrint(w)
 }

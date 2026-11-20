@@ -111,10 +111,9 @@ func buildEnvelope(email *response.EmailResponseData, traEmail *parsemail.Email)
 }
 
 func (s *serverSession) Fetch(w *imapserver.FetchWriter, numSet imap.NumSet, options *imap.FetchOptions) error {
-	switch numSet.(type) {
+	switch set := numSet.(type) {
 	case imap.SeqSet:
-		seqSet := numSet.(imap.SeqSet)
-		for _, seq := range seqSet {
+		for _, seq := range set {
 			emailList := list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{
 				Star: cast.ToInt(seq.Start),
 				End:  cast.ToInt(seq.Stop),
@@ -123,8 +122,7 @@ func (s *serverSession) Fetch(w *imapserver.FetchWriter, numSet imap.NumSet, opt
 		}
 
 	case imap.UIDSet:
-		uidSet := numSet.(imap.UIDSet)
-		for _, uid := range uidSet {
+		for _, uid := range set {
 			emailList := list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{
 				Star: cast.ToInt(uint32(uid.Start)),
 				End:  cast.ToInt(uint32(uid.Stop)),
@@ -272,7 +270,7 @@ func write(ctx *context.Context, w *imapserver.FetchWriter, emailList []*respons
 		}
 		for _, section := range options.BodySection {
 			if !section.Peek {
-				detail.MakeRead(ctx, email.Id, true)
+				detail.MakeRead(ctx, email.UeId, true)
 			}
 			emailContent := traEmail.BuildBytes(ctx, false)
 
@@ -329,7 +327,11 @@ func write(ctx *context.Context, w *imapserver.FetchWriter, emailList []*respons
 							fmt.Fprintf(&b, "Bcc: %s\r\n", traEmail.BuildBcc2String())
 						}
 					case "message-id":
-						fmt.Fprintf(&b, "Message-ID: <%d@%s>\r\n", email.Id, config.Instance.Domain)
+						if email.MsgID != "" {
+							fmt.Fprintf(&b, "Message-ID: <%s>\r\n", email.MsgID)
+						} else {
+							fmt.Fprintf(&b, "Message-ID: <%d@%s>\r\n", email.Id, config.Instance.Domain)
+						}
 					case "content-type":
 						args := strings.SplitN(string(emailContent), "\r\n", 3)
 						if len(args) >= 2 {

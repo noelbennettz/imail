@@ -19,7 +19,7 @@ func TestDeleteGroupOwnershipAndAtomicity(t *testing.T) {
 				t.Fatal(err)
 			}
 			engine.SetMaxOpenConns(1)
-			if err := engine.Sync2(&models.Group{}, &models.UserEmail{}); err != nil {
+			if err := engine.Sync2(&models.Group{}, &models.UserEmail{}, &models.MailboxState{}); err != nil {
 				t.Fatal(err)
 			}
 			old := db.Instance

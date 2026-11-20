@@ -26,6 +26,13 @@ type GroupItem struct {
 }
 
 func CreateGroup(ctx *context.Context, name string, parentId int) (*models.Group, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, errors2.New("group name is required")
+	}
+	if len([]rune(name)) > 255 {
+		return nil, errors2.New("group name is too long")
+	}
 	if parentId > 0 {
 		var parent models.Group
 		found, err := db.Instance.Where("id=? and user_id=?", parentId, ctx.UserID).Get(&parent)
@@ -36,9 +43,12 @@ func CreateGroup(ctx *context.Context, name string, parentId int) (*models.Group
 			return nil, errors2.New("parent group not found")
 		}
 	}
-	// Check whether it already exists first
+	// A leaf name only has to be unique inside its parent, so the same name
+	// can be used under different parents (IMAP allows this).
 	var group models.Group
-	db.Instance.Table("group").Where("name = ? and user_id = ?", name, ctx.UserID).Get(&group)
+	if _, err := db.Instance.Table("group").Where("name = ? and parent_id = ? and user_id = ?", name, parentId, ctx.UserID).Get(&group); err != nil {
+		return nil, errors.Wrap(err)
+	}
 	if group.ID > 0 {
 		return &group, nil
 	}
@@ -51,18 +61,84 @@ func CreateGroup(ctx *context.Context, name string, parentId int) (*models.Group
 	return &group, err
 }
 
-func Rename(ctx *context.Context, oldName, newName string) error {
-	oldGroupInfo, err := GetGroupByName(ctx, oldName)
+// RenameByPath renames (and optionally moves) a mailbox. Every descendant is
+// rewritten in the same transaction so full_path never points at an old name.
+func RenameByPath(ctx *context.Context, oldPath, newPath string) error {
+	oldPath = strings.Trim(strings.TrimSpace(oldPath), "/")
+	newPath = strings.Trim(strings.TrimSpace(newPath), "/")
+	if oldPath == "" || newPath == "" {
+		return errors2.New("mailbox name is required")
+	}
+	if len([]rune(oldPath)) > 512 || len([]rune(newPath)) > 512 || len([]rune(pathLeaf(newPath))) > 255 {
+		return errors2.New("mailbox name is too long")
+	}
+	oldGroup, err := ResolveBox(ctx, oldPath)
 	if err != nil {
 		return err
 	}
-	if oldGroupInfo == nil || oldGroupInfo.ID == 0 {
+	if oldGroup == nil || oldGroup.ID == 0 {
 		return errors2.New("group not found")
 	}
-	oldGroupInfo.Name = newName
-	oldGroupInfo.FullPath = getLayerName(ctx, oldGroupInfo, true)
-	_, err = db.Instance.ID(oldGroupInfo.ID).Update(oldGroupInfo)
-	return err
+
+	newName := strings.TrimSpace(pathLeaf(newPath))
+	newParentPath := pathParent(newPath)
+	var newParent *models.Group
+	if newParentPath != "" {
+		newParent, err = ResolveBox(ctx, newParentPath)
+		if err != nil {
+			return err
+		}
+		if newParent == nil || newParent.ID == 0 {
+			return errors2.New("parent group not found")
+		}
+	}
+
+	oldFullPath := oldGroup.FullPath
+	if oldFullPath == "" {
+		oldFullPath = getLayerName(ctx, oldGroup, true)
+	}
+	parentID := 0
+	if newParent != nil {
+		parentID = newParent.ID
+	}
+	oldGroup.Name = newName
+	oldGroup.ParentId = parentID
+	oldGroup.FullPath = getLayerName(ctx, oldGroup, true)
+	newFullPath := oldGroup.FullPath
+
+	trans := db.Instance.NewSession()
+	defer trans.Close()
+	if err := trans.Begin(); err != nil {
+		return errors.Wrap(err)
+	}
+	defer trans.Rollback()
+	if _, err := trans.ID(oldGroup.ID).Update(oldGroup); err != nil {
+		return errors.Wrap(err)
+	}
+	var descendants []models.Group
+	if err := trans.Where("user_id=? and full_path LIKE ?", ctx.UserID, oldFullPath+"/%").Find(&descendants); err != nil {
+		return errors.Wrap(err)
+	}
+	for i := range descendants {
+		oldDescPath := descendants[i].FullPath
+		newDescPath := newFullPath + strings.TrimPrefix(oldDescPath, oldFullPath)
+		descendants[i].FullPath = newDescPath
+		if _, err := trans.ID(descendants[i].ID).Cols("full_path").Update(&descendants[i]); err != nil {
+			return errors.Wrap(err)
+		}
+		if _, err := trans.Table(&models.MailboxState{}).Where("user_id=? and mailbox=?", ctx.UserID, oldDescPath).
+			Update(map[string]interface{}{"mailbox": newDescPath}); err != nil {
+			return errors.Wrap(err)
+		}
+	}
+	if _, err := trans.Table(&models.MailboxState{}).Where("user_id=? and mailbox=?", ctx.UserID, oldFullPath).
+		Update(map[string]interface{}{"mailbox": newFullPath}); err != nil {
+		return errors.Wrap(err)
+	}
+	if err := trans.Commit(); err != nil {
+		return errors.Wrap(err)
+	}
+	return nil
 }
 
 func GetGroupByName(ctx *context.Context, name string) (*models.Group, error) {
@@ -77,6 +153,32 @@ func GetGroupByFullPath(ctx *context.Context, fullPath string) (*models.Group, e
 	_, err := db.Instance.Table("group").Where("full_path = ? and user_id = ?", fullPath, ctx.UserID).Get(&group)
 
 	return &group, err
+}
+
+// ResolveBox finds a custom mailbox by its full path. Top-level names are also
+// accepted for callers that only have a leaf name.
+func ResolveBox(ctx *context.Context, nameOrPath string) (*models.Group, error) {
+	nameOrPath = strings.Trim(strings.TrimSpace(nameOrPath), "/")
+	if nameOrPath == "" {
+		return &models.Group{}, nil
+	}
+	if group, err := GetGroupByFullPath(ctx, nameOrPath); err != nil || group.ID > 0 {
+		return group, err
+	}
+	return GetGroupByName(ctx, nameOrPath)
+}
+
+func pathLeaf(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	return parts[len(parts)-1]
+}
+
+func pathParent(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) <= 1 {
+		return ""
+	}
+	return strings.Join(parts[:len(parts)-1], "/")
 }
 
 func DelGroup(ctx *context.Context, groupId int) (bool, error) {
@@ -114,9 +216,22 @@ func DelGroup(ctx *context.Context, groupId int) (bool, error) {
 		}
 	}
 
+	var removed []models.Group
+	if err := trans.Where("user_id=?", ctx.UserID).In("id", allGroupIds).Find(&removed); err != nil {
+		return false, errors.Wrap(err)
+	}
 	num, err := trans.Where("user_id=?", ctx.UserID).In("id", allGroupIds).Delete(&models.Group{})
 	if err != nil {
 		return false, errors.Wrap(err)
+	}
+	if len(removed) > 0 {
+		paths := make([]string, 0, len(removed))
+		for _, item := range removed {
+			paths = append(paths, item.FullPath)
+		}
+		if _, err := trans.Table(&models.MailboxState{}).Where("user_id=?", ctx.UserID).In("mailbox", paths).Delete(&models.MailboxState{}); err != nil {
+			return false, errors.Wrap(err)
+		}
 	}
 	_, err = trans.Table(&models.UserEmail{}).Where("user_id=?", ctx.UserID).
 		In("group_id", allGroupIds).Update(map[string]interface{}{"group_id": 0})
@@ -204,13 +319,13 @@ func IsDefaultBox(box string) bool {
 func GetGroupStatus(ctx *context.Context, groupName string, params []string) (string, map[string]int) {
 	retMap := map[string]int{}
 
-	if !IsDefaultBox(groupName) {
-		groupNames := strings.Split(groupName, "/")
-		groupName = groupNames[len(groupNames)-1]
-
-		var group models.Group
-		db.Instance.Table("group").Where("user_id=? and name=?", ctx.UserID, groupName).Get(&group)
-		if group.ID == 0 {
+	key := strings.Trim(strings.TrimSpace(groupName), "/")
+	validity := models.GroupNameToCode[key]
+	maxUID := 0
+	groupID := 0
+	if !IsDefaultBox(key) {
+		box, err := ResolveBox(ctx, key)
+		if err != nil || box == nil || box.ID == 0 {
 			ret := ""
 			for _, param := range params {
 				if ret != "" {
@@ -221,29 +336,14 @@ func GetGroupStatus(ctx *context.Context, groupName string, params []string) (st
 			}
 			return fmt.Sprintf("(%s)", ret), retMap
 		}
-		ret := ""
-		for _, param := range params {
-			if ret != "" {
-				ret += " "
-			}
-			var value int
-
-			switch param {
-			case "MESSAGES":
-				db.Instance.Table("user_email").Select("count(1)").Where("group_id=?", group.ID).Get(&value)
-			case "UIDNEXT":
-				db.Instance.Table("user_email").Select("id").Where("group_id=?", group.ID).OrderBy("id desc").Get(&value)
-				value += 1
-			case "UIDVALIDITY":
-				value = group.ID
-			case "UNSEEN":
-				db.Instance.Table("user_email").Select("count(1)").Where("group_id=? and is_read=0", group.ID).Get(&value)
-			}
-			retMap[param] = value
-			ret += fmt.Sprintf("%s %d", param, value)
-		}
-		return fmt.Sprintf("(%s)", ret), retMap
+		key = box.FullPath
+		groupID = box.ID
+		validity = box.ID
+		maxUID = maxMailboxUID(ctx, box.ID)
+	} else {
+		maxUID = maxUIDForDefaultBox(ctx, key)
 	}
+	nextUID, validity := mailboxState(ctx, key, validity, maxUID)
 
 	ret := ""
 	for _, param := range params {
@@ -254,13 +354,21 @@ func GetGroupStatus(ctx *context.Context, groupName string, params []string) (st
 
 		switch param {
 		case "MESSAGES":
-			value = getGroupNum(ctx, groupName, false)
+			if groupID > 0 {
+				db.Instance.Table("user_email").Select("count(1)").Where("group_id=?", groupID).Get(&value)
+			} else {
+				value = getGroupNum(ctx, key, false)
+			}
 		case "UIDNEXT":
-			value = getNextUID(ctx, groupName)
+			value = nextUID
 		case "UIDVALIDITY":
-			value = models.GroupNameToCode[groupName]
+			value = validity
 		case "UNSEEN":
-			value = getGroupNum(ctx, groupName, true)
+			if groupID > 0 {
+				db.Instance.Table("user_email").Select("count(1)").Where("group_id=? and is_read=0", groupID).Get(&value)
+			} else {
+				value = getGroupNum(ctx, key, true)
+			}
 		default:
 			continue
 		}
@@ -274,56 +382,91 @@ func GetGroupStatus(ctx *context.Context, groupName string, params []string) (st
 	return fmt.Sprintf("(%s)", ret), retMap
 }
 
-func getNextUID(ctx *context.Context, groupName string) int {
-	var lastId int
+// mailboxState returns the UIDVALIDITY and a UIDNEXT that never decreases.
+func mailboxState(ctx *context.Context, mailbox string, validity, maxUID int) (nextUID, uidValidity int) {
+	var state models.MailboxState
+	has, err := db.Instance.Where("user_id=? and mailbox=?", ctx.UserID, mailbox).Get(&state)
+	if err != nil {
+		log.WithContext(ctx).Errorf("Load mailbox state: %v", err)
+		return maxUID + 1, validity
+	}
+	if !has {
+		state = models.MailboxState{
+			UserID:      ctx.UserID,
+			Mailbox:     mailbox,
+			UIDValidity: validity,
+			UIDNext:     maxUID + 1,
+		}
+		if _, err := db.Instance.Insert(&state); err != nil {
+			log.WithContext(ctx).Errorf("Insert mailbox state: %v", err)
+		}
+		return state.UIDNext, state.UIDValidity
+	}
+	next := state.UIDNext
+	if next < 1 {
+		next = 1
+	}
+	if maxUID+1 > next {
+		next = maxUID + 1
+	}
+	if state.UIDValidity == 0 {
+		state.UIDValidity = validity
+	}
+	if next != state.UIDNext || state.UIDValidity != validity {
+		state.UIDNext = next
+		if state.UIDValidity == 0 {
+			state.UIDValidity = validity
+		}
+		if _, err := db.Instance.ID(state.ID).Cols("uid_next", "uid_validity").Update(&state); err != nil {
+			log.WithContext(ctx).Errorf("Update mailbox state: %v", err)
+		}
+	}
+	return state.UIDNext, state.UIDValidity
+}
+
+func maxMailboxUID(ctx *context.Context, groupID int) int {
+	var lastID int
+	db.Instance.Table("user_email").Select("id").Where("user_id=? and group_id=?", ctx.UserID, groupID).OrderBy("id desc").Get(&lastID)
+	return lastID
+}
+
+func maxUIDForDefaultBox(ctx *context.Context, groupName string) int {
+	var lastID int
 	switch groupName {
 	case "INBOX":
-		db.Instance.Table("user_email").Select("id").Where("user_id=? and group_id=0 and status = 0", ctx.UserID).OrderBy("id desc").Get(&lastId)
+		db.Instance.Table("user_email").Select("id").Where("user_id=? and status = 0 and (group_id = 0 or group_id = ?)", ctx.UserID, models.INBOX).OrderBy("id desc").Get(&lastID)
 	case "Sent Messages":
-		db.Instance.Table("user_email").Select("id").Where("user_id=? and group_id=0 and status = 1", ctx.UserID).OrderBy("id desc").Get(&lastId)
+		db.Instance.Table("user_email").Select("id").Where("user_id=? and ((status = 1 and group_id = 0) or group_id = ?)", ctx.UserID, models.Sent).OrderBy("id desc").Get(&lastID)
 	case "Drafts":
-		db.Instance.Table("user_email").Select("id").Where("user_id=? and group_id=0 and status = 4", ctx.UserID).OrderBy("id desc").Get(&lastId)
+		db.Instance.Table("user_email").Select("id").Where("user_id=? and ((status = 4 and group_id = 0) or group_id = ?)", ctx.UserID, models.Drafts).OrderBy("id desc").Get(&lastID)
 	case "Deleted Messages":
-		db.Instance.Table("user_email").Select("id").Where("user_id=? and status = 3", ctx.UserID).OrderBy("id desc").Get(&lastId)
+		db.Instance.Table("user_email").Select("id").Where("user_id=? and ((status = 3 and group_id = 0) or group_id = ?)", ctx.UserID, models.Deleted).OrderBy("id desc").Get(&lastID)
 	case "Junk":
-		db.Instance.Table("user_email").Select("id").Where("user_id=? and group_id=0 and status = 5", ctx.UserID).OrderBy("id desc").Get(&lastId)
+		db.Instance.Table("user_email").Select("id").Where("user_id=? and ((status = 5 and group_id = 0) or group_id = ?)", ctx.UserID, models.Junk).OrderBy("id desc").Get(&lastID)
 	}
-	return lastId + 1
+	return lastID
 }
 
 func getGroupNum(ctx *context.Context, groupName string, mustUnread bool) int {
 	var count int
+	unread := ""
+	if mustUnread {
+		unread = " and is_read=0"
+	}
 	switch groupName {
 	case "INBOX":
-		if mustUnread {
-			db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and status=0 and is_read=0", ctx.UserID).Get(&count)
-		} else {
-			db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and status=0", ctx.UserID).Get(&count)
-		}
+		db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and status=0 and (group_id=0 or group_id=?)"+unread, ctx.UserID, models.INBOX).Get(&count)
 	case "Sent Messages":
 		if mustUnread {
-			count = 0
-		} else {
-			db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and status=1", ctx.UserID).Get(&count)
+			return 0
 		}
+		db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and ((status=1 and group_id=0) or group_id=?)", ctx.UserID, models.Sent).Get(&count)
 	case "Drafts":
-		if mustUnread {
-			db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and status=4 and is_read=0", ctx.UserID).Get(&count)
-		} else {
-			db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and status=4", ctx.UserID).Get(&count)
-		}
+		db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and ((status=4 and group_id=0) or group_id=?)"+unread, ctx.UserID, models.Drafts).Get(&count)
 	case "Deleted Messages":
-		if mustUnread {
-			db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and status=3 and is_read=0", ctx.UserID).Get(&count)
-		} else {
-			db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and status=3", ctx.UserID).Get(&count)
-		}
+		db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and ((status=3 and group_id=0) or group_id=?)"+unread, ctx.UserID, models.Deleted).Get(&count)
 	case "Junk":
-		if mustUnread {
-			db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and status=5 and is_read=0", ctx.UserID).Get(&count)
-		} else {
-			db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and status=5", ctx.UserID).Get(&count)
-		}
+		db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and ((status=5 and group_id=0) or group_id=?)"+unread, ctx.UserID, models.Junk).Get(&count)
 	}
 	return count
 }

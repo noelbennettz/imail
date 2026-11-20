@@ -82,15 +82,17 @@ func (s *Session) Data(r io.Reader) error {
 		// DKIM validation
 		dkimStatus = parsemail.Check(ctx, bytes.NewReader(emailData))
 
-		SPFStatus = spfCheck(s.RemoteAddress.String(), email.Sender, email.Sender.EmailAddress)
+		SPFStatus = spfCheck(s.RemoteAddress.String(), envelopeSender(email, s.From))
 
-		_, formDomain := email.From.GetDomainAccount()
-		spoofed := array.InArray(formDomain, config.Instance.Domains) && SPFStatus == false
+		fromDomain := ""
+		if email.From != nil {
+			_, fromDomain = email.From.GetDomainAccount()
+		}
+		_, envelopeDomain := splitAddress(s.From)
+		spoofed := (array.InArray(fromDomain, config.Instance.Domains) || array.InArray(envelopeDomain, config.Instance.Domains)) && !SPFStatus
 		if spoofed {
 			dkimStatus = false
 		}
-		email.Authentication = parsemail.NewEmailAuthentication(SPFStatus, dkimStatus)
-
 		email.Authentication = parsemail.NewEmailAuthentication(SPFStatus, dkimStatus)
 		// Spoofed local-domain mail is classified as junk, not deleted.
 		if spoofed {
@@ -227,7 +229,28 @@ func saveEmail(ctx *context.Context, size int, rawMIME []byte, email *parsemail.
 	return users, saved, nil
 }
 
-func spfCheck(remoteAddress string, sender *parsemail.User, senderString string) bool {
+// envelopeSender is the address SPF must authenticate: the SMTP MAIL FROM,
+// falling back to the From header only when the envelope is empty.
+func envelopeSender(email *parsemail.Email, envelope string) string {
+	if strings.TrimSpace(envelope) != "" {
+		return strings.TrimSpace(envelope)
+	}
+	if email != nil && email.From != nil {
+		return email.From.EmailAddress
+	}
+	return ""
+}
+
+func splitAddress(address string) (account, domain string) {
+	address = strings.TrimSpace(address)
+	account, domain, found := strings.Cut(address, "@")
+	if !found {
+		return "", ""
+	}
+	return strings.TrimSpace(account), strings.TrimSpace(domain)
+}
+
+func spfCheck(remoteAddress, sender string) bool {
 	// spf validation. The remote address is host:port on both stacks
 	// ("1.2.3.4:25" and "[2001:db8::1]:25"), and an IPv6 zone may be attached.
 	host := remoteAddress
@@ -250,12 +273,12 @@ func spfCheck(remoteAddress string, sender *parsemail.User, senderString string)
 		return true
 	}
 
-	tmp := strings.Split(sender.EmailAddress, "@")
-	if len(tmp) < 2 {
+	_, domain := splitAddress(sender)
+	if domain == "" {
 		return false
 	}
 
-	res := spf.CheckHost(ip, tmp[1], senderString, "")
+	res := spf.CheckHost(ip, domain, sender, "")
 
 	if res == spf.None || res == spf.Pass {
 		// spf validation passed

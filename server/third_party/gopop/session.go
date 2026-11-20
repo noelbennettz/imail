@@ -22,4 +22,8 @@ type Session struct {
 	Conn      net.Conn
 	InTls     bool
 	AliveTime time.Time
+	// Messages maps the POP3 message number shown to the client to the
+	// internal email id. Sizes holds the same snapshot's message sizes.
+	Messages map[int64]int64
+	Sizes    map[int64]int64
 }

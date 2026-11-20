@@ -8,6 +8,13 @@ import (
 )
 
 func (s *serverSession) Create(mailbox string, options *imap.CreateOptions) error {
+	mailbox = strings.Trim(strings.TrimSpace(mailbox), `"`)
+	if mailbox == "" || group.IsDefaultBox(mailbox) {
+		return &imap.Error{
+			Type: imap.StatusResponseTypeNo,
+			Text: "Mailbox already exists",
+		}
+	}
 	groupPath := strings.Split(mailbox, "/")
 
 	var parentId int

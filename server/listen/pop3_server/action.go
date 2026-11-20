@@ -27,6 +27,39 @@ import (
 
 type action struct{}
 
+// pop3Maildrop is the INBOX snapshot exposed over POP3. POP3 has no folders, so
+// only received, non-deleted messages in INBOX are part of the maildrop.
+func pop3Maildrop(session *gopop.Session) []listItem {
+	emailList, _ := list.GetEmailList(session.Ctx.(*context.Context), dto.SearchTag{Type: consts.EmailTypeReceive, Status: -1, GroupId: -1}, "", true, 0, 99999)
+	items := make([]listItem, 0, len(emailList))
+	for _, info := range emailList {
+		items = append(items, listItem{Id: cast.ToInt64(info.Id), Size: cast.ToInt64(info.Size)})
+	}
+	return items
+}
+
+// ensureMaildrop assigns the stable 1..N message numbers that POP3 clients
+// expect. The mapping is built once per session, so a message number cannot
+// change while the session is open.
+func ensureMaildrop(session *gopop.Session) map[int64]int64 {
+	if session.Messages != nil {
+		return session.Messages
+	}
+	session.Messages = map[int64]int64{}
+	session.Sizes = map[int64]int64{}
+	for i, item := range pop3Maildrop(session) {
+		number := int64(i + 1)
+		session.Messages[number] = item.Id
+		session.Sizes[number] = item.Size
+	}
+	return session.Messages
+}
+
+func emailIDFor(session *gopop.Session, number int64) (int64, bool) {
+	id, ok := ensureMaildrop(session)[number]
+	return id, ok
+}
+
 // Custom non-standard command
 func (a action) Custom(session *gopop.Session, cmd string, args []string) ([]string, error) {
 	if session.Ctx == nil {
@@ -161,41 +194,32 @@ func (a action) Apop(session *gopop.Session, username, digest string) error {
 func (a action) Stat(session *gopop.Session) (msgNum, msgSize int64, err error) {
 	log.WithContext(session.Ctx).Debugf("POP3 CMD: STAT")
 
-	num, size := list.Stat(session.Ctx.(*context.Context))
-	log.WithContext(session.Ctx).Debugf("POP3 STAT RETURT : %d,%d", num, size)
-	return num, size, nil
+	maildrop := ensureMaildrop(session)
+	for number := int64(1); number <= int64(len(maildrop)); number++ {
+		msgNum++
+		msgSize += session.Sizes[number]
+	}
+	log.WithContext(session.Ctx).Debugf("POP3 STAT RETURT : %d,%d", msgNum, msgSize)
+	return msgNum, msgSize, nil
 }
 
 // Uidl queries the unique identifier of a message
 func (a action) Uidl(session *gopop.Session, msg string) ([]gopop.UidlItem, error) {
 	log.WithContext(session.Ctx).Debugf("POP3 CMD: UIDL ,Args:%s", msg)
 
-	reqId := cast.ToInt64(msg)
-	if reqId > 0 {
-		log.WithContext(session.Ctx).Debugf("Uidl \n %+v", reqId)
-		return []gopop.UidlItem{
-			{
-				Id:      reqId,
-				UnionId: msg,
-			},
-		}, nil
+	if msg != "" {
+		number := cast.ToInt64(msg)
+		emailID, ok := emailIDFor(session, number)
+		if !ok {
+			return nil, errors.New("no such message")
+		}
+		return []gopop.UidlItem{{Id: number, UnionId: cast.ToString(emailID)}}, nil
 	}
 
-	var res []listItem
-
-	emailList, _ := list.GetEmailList(session.Ctx.(*context.Context), dto.SearchTag{Type: consts.EmailTypeReceive, Status: -1, GroupId: -1}, "", true, 0, 99999)
-	for _, info := range emailList {
-		res = append(res, listItem{
-			Id:   cast.ToInt64(info.Id),
-			Size: cast.ToInt64(info.Size),
-		})
-	}
-	ret := []gopop.UidlItem{}
-	for _, re := range res {
-		ret = append(ret, gopop.UidlItem{
-			Id:      re.Id,
-			UnionId: cast.ToString(re.Id),
-		})
+	maildrop := ensureMaildrop(session)
+	ret := make([]gopop.UidlItem, 0, len(maildrop))
+	for number := int64(1); number <= int64(len(maildrop)); number++ {
+		ret = append(ret, gopop.UidlItem{Id: number, UnionId: cast.ToString(maildrop[number])})
 	}
 
 	log.WithContext(session.Ctx).Debugf("Uidl \n %+v", ret)
@@ -210,47 +234,32 @@ type listItem struct {
 // List lists the messages
 func (a action) List(session *gopop.Session, msg string) ([]gopop.MailInfo, error) {
 	log.WithContext(session.Ctx).Debugf("POP3 CMD: LIST ,Args:%s", msg)
-	var res []listItem
-	var listId int
+
+	_ = ensureMaildrop(session)
+	sizes := session.Sizes
+	if sizes == nil {
+		sizes = map[int64]int64{}
+	}
+
+	var numbers []int64
 	if msg != "" {
-		listId = cast.ToInt(msg)
-		if listId == 0 {
+		number := cast.ToInt64(msg)
+		if number <= 0 {
 			return nil, errors.New("params error")
+		}
+		if _, ok := sizes[number]; !ok {
+			return nil, errors.New("no such message")
+		}
+		numbers = []int64{number}
+	} else {
+		for number := int64(1); number <= int64(len(sizes)); number++ {
+			numbers = append(numbers, number)
 		}
 	}
 
-	if listId != 0 {
-		info, err := detail.GetEmailDetail(session.Ctx.(*context.Context), listId, false)
-		if err != nil {
-			return nil, err
-		}
-		item := listItem{
-			Id:   cast.ToInt64(info.Id),
-			Size: cast.ToInt64(info.Size),
-		}
-		if item.Size == 0 {
-			item.Size = 9999
-		}
-		res = append(res, item)
-	} else {
-		emailList, _ := list.GetEmailList(session.Ctx.(*context.Context), dto.SearchTag{Type: consts.EmailTypeReceive, Status: -1, GroupId: -1}, "", true, 0, 99999)
-		for _, info := range emailList {
-			item := listItem{
-				Id:   cast.ToInt64(info.Id),
-				Size: cast.ToInt64(info.Size),
-			}
-			if item.Size == 0 {
-				item.Size = 9999
-			}
-			res = append(res, item)
-		}
-	}
-	ret := []gopop.MailInfo{}
-	for _, re := range res {
-		ret = append(ret, gopop.MailInfo{
-			Id:   re.Id,
-			Size: re.Size,
-		})
+	ret := make([]gopop.MailInfo, 0, len(numbers))
+	for _, number := range numbers {
+		ret = append(ret, gopop.MailInfo{Id: number, Size: sizes[number]})
 	}
 
 	log.WithContext(session.Ctx).Debugf("List \n %+v", ret)
@@ -260,7 +269,11 @@ func (a action) List(session *gopop.Session, msg string) ([]gopop.MailInfo, erro
 // Retr fetches the message details
 func (a action) Retr(session *gopop.Session, id int64) (string, int64, error) {
 	log.WithContext(session.Ctx).Debugf("POP3 CMD: RETR ,Args:%d", id)
-	email, err := detail.GetEmailDetail(session.Ctx.(*context.Context), cast.ToInt(id), false)
+	emailID, ok := emailIDFor(session, id)
+	if !ok {
+		return "", 0, errors.New("no such message")
+	}
+	email, err := detail.GetEmailDetail(session.Ctx.(*context.Context), cast.ToInt(emailID), false)
 	if err != nil {
 		log.WithContext(session.Ctx.(*context.Context)).Errorf("%+v", err)
 		return "", 0, errors.New("server error")
@@ -275,7 +288,11 @@ func (a action) Retr(session *gopop.Session, id int64) (string, int64, error) {
 func (a action) Delete(session *gopop.Session, id int64) error {
 	log.WithContext(session.Ctx).Debugf("POP3 CMD: DELE ,Args:%d", id)
 
-	session.DeleteIds = append(session.DeleteIds, id)
+	emailID, ok := emailIDFor(session, id)
+	if !ok {
+		return errors.New("no such message")
+	}
+	session.DeleteIds = append(session.DeleteIds, emailID)
 	session.DeleteIds = array.Unique(session.DeleteIds)
 	return nil
 }
@@ -288,10 +305,14 @@ func (a action) Rest(session *gopop.Session) error {
 
 func (a action) Top(session *gopop.Session, id int64, n int) (string, error) {
 	log.WithContext(session.Ctx).Debugf("POP3 CMD: TOP %d %d", id, n)
-	email, err := detail.GetEmailDetail(session.Ctx.(*context.Context), cast.ToInt(id), false)
+	emailID, ok := emailIDFor(session, id)
+	if !ok {
+		return "", errors.New("no such message")
+	}
+	email, err := detail.GetEmailDetail(session.Ctx.(*context.Context), cast.ToInt(emailID), false)
 	if err != nil {
 		log.WithContext(session.Ctx.(*context.Context)).Errorf("%+v", err)
-		return "", errors2.New("password error")
+		return "", errors2.New("server error")
 	}
 
 	ret := parsemail.NewEmailFromModel(email.Email).BuildBytes(session.Ctx.(*context.Context), false)

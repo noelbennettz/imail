@@ -13,39 +13,37 @@ import (
 func (s *serverSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest string) error {
 	var emailList []*response.EmailResponseData
 
-	switch numSet.(type) {
+	switch set := numSet.(type) {
 	case imap.SeqSet:
-		seqSet := numSet.(imap.SeqSet)
-		for _, seq := range seqSet {
-			emailList = list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{
+		for _, seq := range set {
+			emailList = append(emailList, list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{
 				Star: cast.ToInt(seq.Start),
 				End:  cast.ToInt(seq.Stop),
-			}, false)
+			}, false)...)
 		}
 	case imap.UIDSet:
-		uidSet := numSet.(imap.UIDSet)
-		for _, uid := range uidSet {
-			emailList = list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{
+		for _, uid := range set {
+			emailList = append(emailList, list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{
 				Star: cast.ToInt(uint32(uid.Start)),
 				End:  cast.ToInt(uint32(uid.Stop)),
-			}, true)
+			}, true)...)
 		}
 	}
+	emailList = uniqueEmailList(emailList)
 
 	var mailIds []int
 	for _, email := range emailList {
 		mailIds = append(mailIds, email.Id)
 	}
 
-	if mailIds == nil || len(mailIds) == 0 {
+	if len(mailIds) == 0 {
 		return nil
 	}
 
 	if group.IsDefaultBox(dest) {
 		return move2defaultbox(s.ctx, mailIds, dest)
-	} else {
-		return move2userbox(s.ctx, mailIds, dest)
 	}
+	return move2userbox(s.ctx, mailIds, dest)
 }
 
 func move2defaultbox(ctx *context.Context, mailIds []int, dest string) error {
@@ -74,7 +72,12 @@ func move2userbox(ctx *context.Context, mailIds []int, dest string) error {
 		}
 	}
 
-	group.MoveMailToGroup(ctx, mailIds, groupInfo.ID)
+	if !group.MoveMailToGroup(ctx, mailIds, groupInfo.ID) {
+		return &imap.Error{
+			Type: imap.StatusResponseTypeNo,
+			Text: "Move failed",
+		}
+	}
 
 	return nil
 }

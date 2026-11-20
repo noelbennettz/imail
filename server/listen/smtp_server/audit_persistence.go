@@ -1,10 +1,8 @@
 package smtp_server
 
 import (
-	"database/sql"
 	"encoding/json"
 	stderrors "errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -24,8 +22,6 @@ import (
 )
 
 const deliveryPendingError = "delivery result pending; outcome unknown after interruption"
-
-type outgoingSender func(*context.Context, *parsemail.Email, []*parsemail.User) (error, map[string]error)
 
 // outboundQueue describes the queue rows that are written with an outbound
 // email: the envelope sender and every envelope recipient. Local mailboxes are
@@ -74,38 +70,6 @@ func (s *Session) deliverOutgoingEmail(email *parsemail.Email) error {
 	// The message row and every queue row committed in one transaction, so the
 	// client can be told the message was accepted: no delivery happens inline
 	// any more, and nothing can be lost between the commit and a delivery.
-	return nil
-}
-
-func persistDeliveryResult(ctx *context.Context, emailID int, status int8, errorText any) error {
-	return db.Transaction(db.Instance, func(session *xorm.Session) error {
-		result, err := session.Exec(db.WithContext(ctx, `update email
-			set status=?, error=?, update_time=CURRENT_TIMESTAMP
-			where id=?`), status, errorText, emailID)
-		if err != nil {
-			return err
-		}
-		if err = requireOneAffected(result, "update email delivery result"); err != nil {
-			return err
-		}
-
-		result, err = session.Exec(db.WithContext(ctx, `update user_email
-			set status=? where email_id=?`), status, emailID)
-		if err != nil {
-			return err
-		}
-		return requireOneAffected(result, "update user_email delivery result")
-	})
-}
-
-func requireOneAffected(result sql.Result, operation string) error {
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("%s: read affected rows: %w", operation, err)
-	}
-	if affected != 1 {
-		return fmt.Errorf("%s: affected %d rows, want 1", operation, affected)
-	}
 	return nil
 }
 

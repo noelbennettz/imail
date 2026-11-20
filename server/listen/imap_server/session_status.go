@@ -7,6 +7,9 @@ import (
 )
 
 func (s *serverSession) Status(mailbox string, options *imap.StatusOptions) (*imap.StatusData, error) {
+	if options == nil {
+		options = &imap.StatusOptions{}
+	}
 	category := []string{}
 	if options.UIDNext {
 		category = append(category, "UIDNEXT")
@@ -23,17 +26,20 @@ func (s *serverSession) Status(mailbox string, options *imap.StatusOptions) (*im
 
 	_, data := group.GetGroupStatus(s.ctx, mailbox, category)
 
-	numMessages := cast.ToUint32(data["MESSAGES"])
-	numUnseen := cast.ToUint32(data["UNSEEN"])
-	numValidity := cast.ToUint32(data["UIDVALIDITY"])
-	numUIDNext := cast.ToUint32(data["UIDNEXT"])
-
-	ret := &imap.StatusData{
-		Mailbox:     mailbox,
-		NumMessages: &numMessages,
-		UIDNext:     imap.UID(numUIDNext),
-		UIDValidity: numValidity,
-		NumUnseen:   &numUnseen,
+	ret := &imap.StatusData{Mailbox: mailbox}
+	if options.NumMessages {
+		value := cast.ToUint32(data["MESSAGES"])
+		ret.NumMessages = &value
+	}
+	if options.NumUnseen {
+		value := cast.ToUint32(data["UNSEEN"])
+		ret.NumUnseen = &value
+	}
+	if options.UIDNext {
+		ret.UIDNext = imap.UID(cast.ToUint32(data["UIDNEXT"]))
+	}
+	if options.UIDValidity {
+		ret.UIDValidity = cast.ToUint32(data["UIDVALIDITY"])
 	}
 
 	return ret, nil

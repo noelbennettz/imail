@@ -267,17 +267,24 @@ func updateEntry(session *xorm.Session, id int64, values map[string]any) error {
 }
 
 // setEmailResult mirrors the delivery outcome into the email audit columns the
-// web client reads.
+// web client reads. Only the sender's own user_email row is touched: recipient
+// copies of the same message have their own status and must not be rewritten
+// when the outbound queue finishes.
 func setEmailResult(session *xorm.Session, emailID int, status int8, errorText any) error {
+	var owner models.Email
+	if _, err := session.Table("email").Where("id=?", emailID).Cols("send_user_id").Get(&owner); err != nil {
+		return err
+	}
 	if _, err := session.Exec(db.WithContext(nil, `update email
 		set status=?, error=?, update_time=CURRENT_TIMESTAMP
 		where id=?`), status, errorText, emailID); err != nil {
 		return err
 	}
-	// The message may already be deleted by its owner; the row still exists and
-	// the update is best effort.
+	if owner.SendUserID <= 0 {
+		return nil
+	}
 	if _, err := session.Exec(db.WithContext(nil, `update user_email
-		set status=? where email_id=?`), status, emailID); err != nil {
+		set status=? where email_id=? and user_id=?`), status, emailID, owner.SendUserID); err != nil {
 		return err
 	}
 	return nil

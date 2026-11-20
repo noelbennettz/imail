@@ -185,7 +185,7 @@ func doMove(ctx *context.Context, rule *dto.Rule, email *parsemail.Email, user *
 		}
 
 		_, err = db.Instance.Table(&models.UserEmail{}).Where("email_id=? and user_id=?", email.MessageId, rule.UserId).
-			Cols("group_id", "status").Update(map[string]interface{}{"group_id": 0, "status": 0})
+			Cols("group_id", "status").Update(map[string]interface{}{"group_id": 0, "status": consts.EmailStatusSent})
 		if err != nil {
 			log.WithContext(ctx).Errorf("sqlERror :%v", err)
 		}

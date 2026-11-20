@@ -145,6 +145,9 @@ PGRpdiBkaXI9Imx0ciI+PGRpdj7mraPmlofmtYvor5UyPC9kaXY+PC9kaXY+DQo=
 }
 
 func TestImailEmail(t *testing.T) {
+	if _, err := os.Stat(filepath.Join("..", "..", "config", "dkim", "dkim.priv")); err != nil {
+		t.Skip("DKIM test key is not available")
+	}
 	testInit()
 	emailData := `DKIM-Signature: a=rsa-sha256; bh=x7Rh+N2y2K9exccEAyKCTAGDgYKfnLZpMWc25ug5Ny4=;
  c=simple/simple; d=domain.com;

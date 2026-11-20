@@ -199,6 +199,15 @@ func (w *Worker) deliverEntry(ctx *context.Context, entry *models.EmailQueue, em
 	if err != nil {
 		return err, nil
 	}
+	local, remote := splitQueueRecipients(recipients)
+	if len(local) > 0 {
+		if localErr := deliverLocal(ctx, email.Id, local); localErr != nil {
+			return localErr, map[string]error{"local": localErr}
+		}
+	}
+	if len(remote) == 0 {
+		return nil, nil
+	}
 	data := []byte(email.RawMIME)
 	if len(data) == 0 {
 		// Rows written before raw MIME was stored can still be rebuilt from the
@@ -208,7 +217,7 @@ func (w *Worker) deliverEntry(ctx *context.Context, entry *models.EmailQueue, em
 	if len(data) == 0 {
 		return fmt.Errorf("email %d has no message body", email.Id), nil
 	}
-	return send.Deliver(ctx, entry.EnvelopeFrom, recipients, data)
+	return send.Deliver(ctx, entry.EnvelopeFrom, remote, data)
 }
 
 // permanentFailure reports whether every failing recipient domain answered with

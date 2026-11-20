@@ -8,6 +8,8 @@ import (
 )
 
 func (s *serverSession) Rename(mailbox, newName string) error {
+	mailbox = strings.Trim(strings.TrimSpace(mailbox), `"`)
+	newName = strings.Trim(strings.TrimSpace(newName), `"`)
 	if group.IsDefaultBox(mailbox) {
 		return &imap.Error{
 			Type: imap.StatusResponseTypeNo,
@@ -15,16 +17,7 @@ func (s *serverSession) Rename(mailbox, newName string) error {
 		}
 	}
 
-	groupPath := strings.Split(mailbox, "/")
-
-	oldGroupName := groupPath[len(groupPath)-1]
-
-	newGroupPath := strings.Split(newName, "/")
-
-	newGroupName := newGroupPath[len(newGroupPath)-1]
-
-	err := group.Rename(s.ctx, oldGroupName, newGroupName)
-	if err != nil {
+	if err := group.RenameByPath(s.ctx, mailbox, newName); err != nil {
 		return &imap.Error{
 			Type: imap.StatusResponseTypeNo,
 			Text: err.Error(),

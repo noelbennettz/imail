@@ -84,7 +84,7 @@ func insertBounce(session *xorm.Session, entry *models.EmailQueue, reason string
 		Size:         len(mime),
 		SPFCheck:     1,
 		DKIMCheck:    1,
-		Status:       consts.EmailStatusSent,
+		Status:       consts.EmailStatusWait,
 		SendDate:     now,
 		CronSendTime: now,
 		CreateTime:   now,
@@ -96,7 +96,7 @@ func insertBounce(session *xorm.Session, entry *models.EmailQueue, reason string
 	if bounce.Id <= 0 {
 		return fmt.Errorf("bounce insert returned no id")
 	}
-	relation := models.UserEmail{UserID: user.ID, EmailID: bounce.Id, Status: consts.EmailStatusSent, IsRead: 0}
+	relation := models.UserEmail{UserID: user.ID, EmailID: bounce.Id, Status: consts.EmailStatusWait, IsRead: 0}
 	_, err = session.Insert(&relation)
 	return err
 }

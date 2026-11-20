@@ -10,7 +10,7 @@ import (
 	"github.com/noelbennettz/imail/dto"
 	"github.com/noelbennettz/imail/dto/response"
 	"github.com/noelbennettz/imail/models"
-	"github.com/noelbennettz/imail/utils/array"
+	"github.com/noelbennettz/imail/services/group"
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
 )
@@ -161,112 +161,145 @@ type ImapListReq struct {
 
 func GetUEListByUID(ctx *context.Context, groupName string, star, end int, uidList []int) []*response.UserEmailUIDData {
 	var ue []*response.UserEmailUIDData
-	sql := "SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM `user_email` WHERE user_id = ? "
-
-	params := []any{ctx.UserID}
-
-	if len(uidList) > 0 {
-		sql += fmt.Sprintf(" and id in (%s)", array.Join(uidList, ","))
+	sql, params, ok := userEmailRowsSQL(ctx, groupName, true, ImapListReq{UidList: uidList, Star: star, End: end})
+	if !ok {
+		return nil
 	}
-	if star > 0 {
-		sql += " and id >=?"
-		params = append(params, star)
+	if err := db.Instance.SQL(sql, params...).Find(&ue); err != nil {
+		log.WithContext(ctx).Errorf("SQL ERROR: %s ,Error:%s", sql, err)
 	}
-	if end > 0 {
-		sql += " and id <=?"
-		params = append(params, end)
-	}
-
-	switch groupName {
-	case "INBOX":
-		sql += " and status =?"
-		params = append(params, 0)
-	case "Sent Messages":
-		sql += " and status =?"
-		params = append(params, 1)
-	case "Drafts":
-		sql += " and status =?"
-		params = append(params, 4)
-	case "Deleted Messages":
-		sql += " and status =?"
-		params = append(params, 3)
-	case "Junk":
-		sql += " and status =?"
-		params = append(params, 5)
-	default:
-		groupNames := strings.Split(groupName, "/")
-		groupName = groupNames[len(groupNames)-1]
-
-		var group models.Group
-		db.Instance.Table("group").Where("user_id=? and name=?", ctx.UserID, groupName).Get(&group)
-		if group.ID == 0 {
-			return nil
-		}
-
-		sql += " and group_id = ?"
-		params = append(params, group.ID)
-	}
-
-	db.Instance.SQL(sql, params...).Find(&ue)
 	return ue
 }
 
-func getEmailListByUidList(ctx *context.Context, groupName string, req ImapListReq, uid bool) []*response.EmailResponseData {
-	var ret []*response.EmailResponseData
-	var ue []*response.UserEmailUIDData
-	sql := fmt.Sprintf("SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM `user_email` WHERE (user_id = ? and id in (%s) and status = ?)", array.Join(req.UidList, ","))
-	if req.Star > 0 && req.End != 0 {
-		sql = fmt.Sprintf("SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM `user_email` WHERE (user_id = ? and id >=%d and id <= %d and status = ?)", req.Star, req.End)
+// userEmailRowsSQL returns the SELECT used by the IMAP list paths. byUID picks
+// the UID (user_email.id) semantics; otherwise Star/End/UidList are sequence
+// numbers within the mailbox. The table name is quoted per dialect.
+func userEmailRowsSQL(ctx *context.Context, groupName string, byUID bool, req ImapListReq) (string, []any, bool) {
+	boxSQL, boxArgs, ok := boxFilterSQL(ctx, groupName)
+	if !ok {
+		return "", nil, false
 	}
-	if req.Star > 0 && req.End == 0 {
-		sql = fmt.Sprintf("SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM `user_email` WHERE (user_id = ? and id >=%d and status = ?)", req.Star)
-	}
+	table := quoteIdentifier("user_email")
+	params := []any{ctx.UserID}
+	params = append(params, boxArgs...)
 
-	var err error
-	switch groupName {
-	case "INBOX":
-		err = db.Instance.SQL(sql, ctx.UserID, 0).Find(&ue)
-	case "Sent Messages":
-		err = db.Instance.SQL(sql, ctx.UserID, 1).Find(&ue)
-	case "Drafts":
-		err = db.Instance.SQL(sql, ctx.UserID, 4).Find(&ue)
-	case "Deleted Messages":
-		err = db.Instance.SQL(sql, ctx.UserID, 3).Find(&ue)
-	case "Junk":
-		err = db.Instance.SQL(sql, ctx.UserID, 5).Find(&ue)
-	default:
-		groupNames := strings.Split(groupName, "/")
-		groupName = groupNames[len(groupNames)-1]
-
-		var group models.Group
-		db.Instance.Table("group").Where("user_id=? and name=?", ctx.UserID, groupName).Get(&group)
-		if group.ID == 0 {
-			return ret
+	if byUID {
+		sql := "SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM " + table + " WHERE user_id = ? AND " + boxSQL
+		if len(req.UidList) > 0 {
+			sql += " AND id IN (" + placeholders(len(req.UidList)) + ")"
+			params = append(params, intsToAny(req.UidList)...)
+		} else {
+			if req.Star > 0 {
+				sql += " AND id >= ?"
+				params = append(params, req.Star)
+			}
+			if req.End > 0 {
+				sql += " AND id <= ?"
+				params = append(params, req.End)
+			}
 		}
-		err = db.Instance.
-			SQL(fmt.Sprintf(
-				"SELECT * from (SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM `user_email` WHERE (user_id = ? and group_id = ?)) a WHERE serial_number in (%s)",
-				array.Join(req.UidList, ","))).
-			Find(&ue, ctx.UserID, group.ID)
+		return sql, params, true
 	}
 
-	if err != nil {
-		log.WithContext(ctx).Errorf("SQL ERROR: %s ,Error:%s", sql, err)
+	sql := "SELECT * FROM (SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM " + table + " WHERE user_id = ? AND " + boxSQL + ") a"
+	if len(req.UidList) > 0 {
+		sql += " WHERE serial_number IN (" + placeholders(len(req.UidList)) + ")"
+		params = append(params, intsToAny(req.UidList)...)
+	} else {
+		var conditions []string
+		if req.Star > 0 {
+			conditions = append(conditions, "serial_number >= ?")
+			params = append(params, req.Star)
+		}
+		if req.End > 0 {
+			conditions = append(conditions, "serial_number <= ?")
+			params = append(params, req.End)
+		}
+		if len(conditions) > 0 {
+			sql += " WHERE " + strings.Join(conditions, " AND ")
+		}
 	}
+	return sql, params, true
+}
+
+// boxFilterSQL maps an IMAP mailbox name to the user_email predicate. Default
+// mailboxes keep the legacy group_id values working as well as the status
+// column, and custom mailboxes are resolved by their full path.
+func boxFilterSQL(ctx *context.Context, groupName string) (string, []any, bool) {
+	switch strings.Trim(strings.TrimSpace(groupName), "/") {
+	case "INBOX":
+		return "(status = ? AND (group_id = 0 OR group_id = ?))", []any{0, models.INBOX}, true
+	case "Sent Messages":
+		return "((status = ? AND group_id = 0) OR group_id = ?)", []any{1, models.Sent}, true
+	case "Drafts":
+		return "((status = ? AND group_id = 0) OR group_id = ?)", []any{4, models.Drafts}, true
+	case "Deleted Messages":
+		return "((status = ? AND group_id = 0) OR group_id = ?)", []any{3, models.Deleted}, true
+	case "Junk":
+		return "((status = ? AND group_id = 0) OR group_id = ?)", []any{5, models.Junk}, true
+	}
+	box, err := group.ResolveBox(ctx, groupName)
+	if err != nil || box == nil || box.ID == 0 {
+		return "", nil, false
+	}
+	return "group_id = ?", []any{box.ID}, true
+}
+
+func placeholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	parts := make([]string, n)
+	for i := range parts {
+		parts[i] = "?"
+	}
+	return strings.Join(parts, ",")
+}
+
+func intsToAny(values []int) []any {
+	out := make([]any, len(values))
+	for i, value := range values {
+		out[i] = value
+	}
+	return out
+}
+
+func getEmailListByUidList(ctx *context.Context, groupName string, req ImapListReq, uid bool) []*response.EmailResponseData {
+	sql, params, ok := userEmailRowsSQL(ctx, groupName, uid, req)
+	if !ok {
+		return nil
+	}
+	var ue []*response.UserEmailUIDData
+	if err := db.Instance.SQL(sql, params...).Find(&ue); err != nil {
+		log.WithContext(ctx).Errorf("SQL ERROR: %s ,Error:%s", sql, err)
+		return nil
+	}
+	return joinEmails(ue)
+}
+
+// joinEmails loads the email rows for the user_email rows returned by IMAP and
+// keeps the per-mailbox sequence number and UID.
+func joinEmails(ue []*response.UserEmailUIDData) []*response.EmailResponseData {
+	var ret []*response.EmailResponseData
 	ueMap := map[int]*response.UserEmailUIDData{}
 	var emailIds []int
 	for _, email := range ue {
 		ueMap[email.EmailID] = email
 		emailIds = append(emailIds, email.EmailID)
 	}
-
+	if len(emailIds) == 0 {
+		return ret
+	}
 	_ = db.Instance.Table("email").Select(emailColumns()).Where(Eq{"id": emailIds}).Find(&ret)
 	for i, data := range ret {
-		ret[i].IsRead = ueMap[data.Id].IsRead
-		ret[i].SerialNumber = ueMap[data.Id].SerialNumber
-		ret[i].UeId = ueMap[data.Id].ID
+		mapped := ueMap[data.Id]
+		if mapped == nil {
+			continue
+		}
+		ret[i].IsRead = mapped.IsRead
+		ret[i].SerialNumber = mapped.SerialNumber
+		ret[i].UeId = mapped.ID
 	}
-
 	return ret
 }
 
@@ -274,62 +307,5 @@ func GetEmailListByGroup(ctx *context.Context, groupName string, req ImapListReq
 	if len(req.UidList) == 0 && req.Star == 0 && req.End == 0 {
 		return nil
 	}
-
-	if uid {
-		return getEmailListByUidList(ctx, groupName, req, uid)
-	}
-
-	var ret []*response.EmailResponseData
-	var ue []*response.UserEmailUIDData
-
-	sql := fmt.Sprintf("SELECT * from (SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM `user_email` WHERE (user_id = ? and status = ? and group_id=0 )) a WHERE serial_number in (%s)", array.Join(req.UidList, ","))
-	if req.Star > 0 && req.End == 0 {
-		sql = fmt.Sprintf("SELECT * from (SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM `user_email` WHERE (user_id = ? and status = ? and group_id=0 )) a WHERE serial_number >= %d", req.Star)
-	}
-	if req.Star > 0 && req.End > 0 {
-		sql = fmt.Sprintf("SELECT * from (SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM `user_email` WHERE (user_id = ? and status = ? and group_id=0 )) a WHERE serial_number >= %d and serial_number <=%d", req.Star, req.End)
-	}
-
-	switch groupName {
-	case "INBOX":
-		db.Instance.SQL(sql, ctx.UserID, 0).Find(&ue)
-	case "Sent Messages":
-		db.Instance.SQL(sql, ctx.UserID, 1).Find(&ue)
-	case "Drafts":
-		db.Instance.SQL(sql, ctx.UserID, 4).Find(&ue)
-	case "Deleted Messages":
-		db.Instance.SQL(sql, ctx.UserID, 3).Find(&ue)
-	case "Junk":
-		db.Instance.SQL(sql, ctx.UserID, 5).Find(&ue)
-	default:
-		groupNames := strings.Split(groupName, "/")
-		groupName = groupNames[len(groupNames)-1]
-
-		var group models.Group
-		db.Instance.Table("group").Where("user_id=? and name=?", ctx.UserID, groupName).Get(&group)
-		if group.ID == 0 {
-			return ret
-		}
-		db.Instance.
-			SQL(fmt.Sprintf(
-				"SELECT * from (SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM `user_email` WHERE (user_id = ? and group_id = ?)) a WHERE serial_number in (%s)",
-				array.Join(req.UidList, ","))).
-			Find(&ue, ctx.UserID, group.ID)
-	}
-
-	ueMap := map[int]*response.UserEmailUIDData{}
-	var emailIds []int
-	for _, email := range ue {
-		ueMap[email.EmailID] = email
-		emailIds = append(emailIds, email.EmailID)
-	}
-
-	_ = db.Instance.Table("email").Select(emailColumns()).Where(Eq{"id": emailIds}).Find(&ret)
-	for i, data := range ret {
-		ret[i].IsRead = ueMap[data.Id].IsRead
-		ret[i].SerialNumber = ueMap[data.Id].SerialNumber
-		ret[i].UeId = ueMap[data.Id].ID
-	}
-
-	return ret
+	return getEmailListByUidList(ctx, groupName, req, uid)
 }

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/db"
 	"github.com/noelbennettz/imail/dto/response"
 	"github.com/noelbennettz/imail/utils/context"
@@ -46,12 +47,18 @@ func GetEmailThread(ctx *context.Context, id int, markRead bool, offset, limit i
 	includeDeleted := anchorStatus.Status == 3
 
 	pattern := "%" + escapeLike(base) + "%"
+	escapeClause := `ESCAPE '\'`
+	if config.Instance != nil && config.Instance.DbType == config.DBTypeMySQL {
+		// MySQL treats a backslash inside a string literal as an escape, so the
+		// escape character itself has to be written twice.
+		escapeClause = `ESCAPE '\\'`
+	}
 	candidates := make([]threadCandidate, 0, 8)
-	err = db.Instance.SQL(
-		`SELECT e.id, e.subject, ue.status FROM email e
+	query := `SELECT e.id, e.subject, ue.status FROM email e
 		 JOIN user_email ue ON e.id = ue.email_id
-		 WHERE ue.user_id = ? AND LOWER(e.subject) LIKE LOWER(?) ESCAPE '\'
-		 ORDER BY e.id ASC`, ctx.UserID, pattern).Find(&candidates)
+		 WHERE ue.user_id = ? AND LOWER(e.subject) LIKE LOWER(?) ` + escapeClause + `
+		 ORDER BY e.id ASC`
+	err = db.Instance.SQL(query, ctx.UserID, pattern).Find(&candidates)
 	if err != nil {
 		return nil, 0, errors.Wrap(err)
 	}

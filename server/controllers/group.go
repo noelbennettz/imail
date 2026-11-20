@@ -62,14 +62,14 @@ type addGroupRequest struct {
 }
 
 func AddGroup(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
-	var reqData *addGroupRequest
 	reqBytes, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.WithContext(ctx).Errorf("%+v", err)
 	}
-	err = json.Unmarshal(reqBytes, &reqData)
-	if err != nil {
-		log.WithContext(ctx).Errorf("%+v", err)
+	var reqData addGroupRequest
+	if err := json.Unmarshal(reqBytes, &reqData); err != nil {
+		response.NewErrorResponse(response.ParamsError, "params error", err.Error()).FPrint(w)
+		return
 	}
 
 	newGroup, err := group.CreateGroup(ctx, reqData.Name, reqData.ParentId)
@@ -86,14 +86,14 @@ type delGroupRequest struct {
 }
 
 func DelGroup(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
-	var reqData *delGroupRequest
 	reqBytes, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.WithContext(ctx).Errorf("%+v", err)
 	}
-	err = json.Unmarshal(reqBytes, &reqData)
-	if err != nil {
-		log.WithContext(ctx).Errorf("%+v", err)
+	var reqData delGroupRequest
+	if err := json.Unmarshal(reqBytes, &reqData); err != nil {
+		response.NewErrorResponse(response.ParamsError, "params error", err.Error()).FPrint(w)
+		return
 	}
 	succ, err := group.DelGroup(ctx, reqData.Id)
 	if err != nil {

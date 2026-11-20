@@ -39,6 +39,9 @@ func TestMain(m *testing.M) {
 	config.Instance.WebDomain = "mail.domain.com"
 	config.Instance.DbType = config.DBTypeSQLite
 	config.Instance.DbDSN = filepath.Join(config.ROOT_PATH, "config", "imail_temp.db")
+	// The IMAP tests create and expunge fixed UIDs, so each run must start from
+	// an empty database instead of whatever the previous run left behind.
+	_ = os.Remove(config.Instance.DbDSN)
 	config.Instance.SSLPublicKeyPath = filepath.Join(config.ROOT_PATH, "config", "ssl", "public.crt")
 	config.Instance.SSLPrivateKeyPath = filepath.Join(config.ROOT_PATH, "config", "ssl", "private.key")
 	if err := db.Init(""); err != nil {
@@ -211,8 +214,8 @@ func TestList(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if len(res) == 0 {
-		t.Error("List Error")
+	if len(res) != 0 {
+		t.Errorf("LIST with an empty pattern should not match any mailbox: %+v", res)
 	}
 
 	res, err = clientLogin.List("", "*", &imap.ListOptions{}).Collect()
@@ -223,7 +226,7 @@ func TestList(t *testing.T) {
 		t.Error("List Error")
 	}
 
-	res, err = clientLogin.List("", "一级菜单/%", &imap.ListOptions{}).Collect()
+	res, err = clientLogin.List("", "主菜单/%", &imap.ListOptions{}).Collect()
 	if err != nil {
 		t.Error(err)
 	}
@@ -235,7 +238,7 @@ func TestList(t *testing.T) {
 		t.Error("List Error")
 	}
 
-	res, err = clientLogin.List("", "一级菜单/*", &imap.ListOptions{}).Collect()
+	res, err = clientLogin.List("", "主菜单/*", &imap.ListOptions{}).Collect()
 	if err != nil {
 		t.Error(err)
 	}
@@ -245,12 +248,29 @@ func TestList(t *testing.T) {
 	if len(res) == 0 {
 		t.Error("List Error")
 	}
+
+	res, err = clientLogin.List("", "%", &imap.ListOptions{}).Collect()
+	if err != nil {
+		t.Error(err)
+	}
+	if !containsMailbox(res, "INBOX") {
+		t.Errorf("LIST %%%% did not return INBOX: %+v", res)
+	}
+}
+
+func containsMailbox(list []*imap.ListData, name string) bool {
+	for _, item := range list {
+		if item.Mailbox == name {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDelete(t *testing.T) {
 	clientLogin.Create("一级菜单/二级菜单", nil).Wait()
 
-	err := clientLogin.Delete("二级菜单").Wait()
+	err := clientLogin.Delete("一级菜单/二级菜单").Wait()
 	if err != nil {
 		t.Error(err)
 	}
@@ -266,9 +286,6 @@ func TestDelete(t *testing.T) {
 	if array.InArray("二级菜单", mailbox) {
 		t.Error(mailbox)
 	}
-}
-
-func TestAppend(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
@@ -406,10 +423,28 @@ func TestExpunge(t *testing.T) {
 		t.Errorf("%+v", err)
 	}
 	t.Logf("%+v", res)
+
+	// UID 1 belongs to Deleted Messages, not INBOX: UID EXPUNGE must not touch
+	// it while INBOX is selected.
+	var inInbox []models.UserEmail
+	db.Instance.Table("user_email").Where("id=2").Find(&inInbox)
+	if len(inInbox) != 0 {
+		t.Error("UID EXPUNGE did not delete the INBOX message")
+	}
+	var stillDeleted []models.UserEmail
+	db.Instance.Table("user_email").Where("id=1").Find(&stillDeleted)
+	if len(stillDeleted) != 1 {
+		t.Fatal("UID EXPUNGE deleted a message outside the selected mailbox")
+	}
+
+	clientLogin.Select("Deleted Messages", &imap.SelectOptions{}).Wait()
+	if _, err := clientLogin.UIDExpunge(imap.UIDSetNum(1)).Collect(); err != nil {
+		t.Errorf("%+v", err)
+	}
 	var ues []models.UserEmail
-	db.Instance.Table("user_email").Where("id=1 or id=2").Find(&ues)
+	db.Instance.Table("user_email").Where("id=1").Find(&ues)
 	if len(ues) > 0 {
-		t.Errorf("TestExpunge Error")
+		t.Error("TestExpunge Error")
 	}
 }
 
@@ -510,6 +545,141 @@ func TestCopy(t *testing.T) {
 		}
 	} else {
 		t.Error("No Fetch Result")
+	}
+}
+
+func TestCopyMultipleRanges(t *testing.T) {
+	if _, err := clientLogin.Select("INBOX", &imap.SelectOptions{}).Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if err := clientLogin.Create("MultiCopyDest", nil).Wait(); err != nil {
+		t.Fatal(err)
+	}
+	var user models.User
+	if _, err := db.Instance.Table("user").Where("account=?", "testCase").Get(&user); err != nil {
+		t.Fatal(err)
+	}
+	var dest models.Group
+	if _, err := db.Instance.Table("group").Where("user_id=? and name=?", user.ID, "MultiCopyDest").Get(&dest); err != nil {
+		t.Fatal(err)
+	}
+	db.Instance.Exec("delete from user_email where user_id=? and group_id=?", user.ID, dest.ID)
+
+	set := imap.SeqSet{{Start: 1, Stop: 2}, {Start: 3, Stop: 4}}
+	if _, err := clientLogin.Copy(set, "MultiCopyDest").Wait(); err != nil {
+		t.Fatalf("copy: %v", err)
+	}
+	count, err := db.Instance.Table("user_email").Where("user_id=? and group_id=?", user.ID, dest.ID).Count()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 4 {
+		t.Fatalf("multi-range COPY copied %d messages, want 4", count)
+	}
+}
+
+func TestCustomFolderFetchAndStore(t *testing.T) {
+	if _, err := clientLogin.Select("INBOX", &imap.SelectOptions{}).Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if err := clientLogin.Create("RegressionBox", nil).Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := clientLogin.Copy(imap.SeqSetNum(1), "RegressionBox").Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := clientLogin.Select("RegressionBox", &imap.SelectOptions{}).Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	messages, err := clientLogin.Fetch(imap.SeqSetNum(1), &imap.FetchOptions{UID: true, Flags: true}).Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("fetch in a custom folder returned %d messages, want 1", len(messages))
+	}
+	uid := messages[0].UID
+
+	store := func(op imap.StoreFlagsOp, flag imap.Flag) {
+		t.Helper()
+		if _, err := clientLogin.Store(imap.UIDSetNum(uid), &imap.StoreFlags{Op: op, Flags: []imap.Flag{flag}}, &imap.StoreOptions{}).Collect(); err != nil {
+			t.Fatalf("store: %v", err)
+		}
+	}
+
+	store(imap.StoreFlagsAdd, imap.FlagSeen)
+	var ue models.UserEmail
+	if _, err := db.Instance.Table("user_email").Where("id=?", int(uid)).Get(&ue); err != nil {
+		t.Fatal(err)
+	}
+	if ue.IsRead != 1 {
+		t.Fatal("+FLAGS \\Seen did not mark the message read")
+	}
+	store(imap.StoreFlagsDel, imap.FlagSeen)
+	var check models.UserEmail
+	if _, err := db.Instance.Table("user_email").Where("id=?", int(uid)).Get(&check); err != nil {
+		t.Fatal(err)
+	}
+	ue = check
+	if ue.IsRead != 0 {
+		t.Fatal("-FLAGS \\Seen did not mark the message unread")
+	}
+
+	store(imap.StoreFlagsAdd, imap.FlagDeleted)
+	exists, err := db.Instance.Table("user_email").Where("id=?", int(uid)).Exist()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		t.Fatal("+FLAGS \\Deleted deleted the message before EXPUNGE")
+	}
+	store(imap.StoreFlagsDel, imap.FlagDeleted)
+	if _, err := clientLogin.Expunge().Collect(); err != nil {
+		t.Fatal(err)
+	}
+	exists, err = db.Instance.Table("user_email").Where("id=?", int(uid)).Exist()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		t.Fatal("-FLAGS \\Deleted did not cancel the pending expunge")
+	}
+	store(imap.StoreFlagsAdd, imap.FlagDeleted)
+	if _, err := clientLogin.Expunge().Collect(); err != nil {
+		t.Fatal(err)
+	}
+	exists, err = db.Instance.Table("user_email").Where("id=?", int(uid)).Exist()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exists {
+		t.Fatal("EXPUNGE did not delete the message")
+	}
+}
+
+func TestAppend(t *testing.T) {
+	raw := "From: testCase@domain.com\r\nTo: testCase@domain.com\r\nSubject: appended\r\n\r\nbody\r\n"
+	command := clientLogin.Append("Drafts", int64(len(raw)), &imap.AppendOptions{Flags: []imap.Flag{imap.FlagSeen}})
+	if _, err := command.Write([]byte(raw)); err != nil {
+		t.Fatal(err)
+	}
+	if err := command.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := command.Wait()
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if data == nil || data.UID == 0 {
+		t.Fatalf("append returned no UID: %+v", data)
+	}
+	var ue models.UserEmail
+	if _, err := db.Instance.Table("user_email").Where("id=?", int(data.UID)).Get(&ue); err != nil {
+		t.Fatal(err)
+	}
+	if ue.ID == 0 || ue.Status != 4 || ue.IsRead != 1 {
+		t.Fatalf("appended draft not stored correctly: %+v", ue)
 	}
 }
 

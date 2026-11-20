@@ -11,97 +11,114 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func matchGroup(ctx *context.Context, w *imapserver.ListWriter, basePath, pattern string) {
+var defaultMailboxes = []struct {
+	name  string
+	attrs []imap.MailboxAttr
+}{
+	{"INBOX", []imap.MailboxAttr{imap.MailboxAttrHasNoChildren}},
+	{"Sent Messages", []imap.MailboxAttr{imap.MailboxAttrHasNoChildren, imap.MailboxAttrSent}},
+	{"Drafts", []imap.MailboxAttr{imap.MailboxAttrHasNoChildren, imap.MailboxAttrDrafts}},
+	{"Deleted Messages", []imap.MailboxAttr{imap.MailboxAttrHasNoChildren, imap.MailboxAttrTrash}},
+	{"Junk", []imap.MailboxAttr{imap.MailboxAttrHasNoChildren, imap.MailboxAttrJunk}},
+}
+
+// mailboxMatch implements the IMAP wildcard rules: % matches anything except
+// the hierarchy delimiter, * matches everything. INBOX is case-insensitive.
+func mailboxMatch(name, pattern string) bool {
+	return matchRunes([]rune(name), []rune(pattern), func(a, b rune) bool {
+		return strings.EqualFold(string(a), string(b))
+	})
+}
+
+func matchRunes(name, pattern []rune, equal func(a, b rune) bool) bool {
+	if len(pattern) == 0 {
+		return len(name) == 0
+	}
+	switch pattern[0] {
+	case '*':
+		for i := 0; i <= len(name); i++ {
+			if matchRunes(name[i:], pattern[1:], equal) {
+				return true
+			}
+		}
+		return false
+	case '%':
+		for i := 0; i <= len(name); i++ {
+			if i > 0 && name[i-1] == '/' {
+				break
+			}
+			if matchRunes(name[i:], pattern[1:], equal) {
+				return true
+			}
+		}
+		return false
+	default:
+		if len(name) == 0 || !equal(name[0], pattern[0]) {
+			return false
+		}
+		return matchRunes(name[1:], pattern[1:], equal)
+	}
+}
+
+func mailboxHasChildren(ctx *context.Context, name string) bool {
 	var groups []*models.Group
-	if basePath == "" && pattern == "*" {
-		db.Instance.Table("group").Where("user_id=?", ctx.UserID).Find(&groups)
-		//w.WriteList(&imap.ListData{
-		//	Attrs:   []imap.MailboxAttr{imap.MailboxAttrNoSelect, imap.MailboxAttrHasChildren},
-		//	Delim:   '/',
-		//	Mailbox: "[iMail]",
-		//})
-		w.WriteList(&imap.ListData{
-			Attrs:   []imap.MailboxAttr{imap.MailboxAttrHasNoChildren},
-			Delim:   '/',
-			Mailbox: "INBOX",
-		})
-		w.WriteList(&imap.ListData{
-			Attrs:   []imap.MailboxAttr{imap.MailboxAttrHasNoChildren, imap.MailboxAttrSent},
-			Delim:   '/',
-			Mailbox: "Sent Messages",
-		})
-		w.WriteList(&imap.ListData{
-			Attrs:   []imap.MailboxAttr{imap.MailboxAttrHasNoChildren, imap.MailboxAttrDrafts},
-			Delim:   '/',
-			Mailbox: "Drafts",
-		})
-
-		w.WriteList(&imap.ListData{
-			Attrs:   []imap.MailboxAttr{imap.MailboxAttrHasNoChildren, imap.MailboxAttrTrash},
-			Delim:   '/',
-			Mailbox: "Deleted Messages",
-		})
-		w.WriteList(&imap.ListData{
-			Attrs:   []imap.MailboxAttr{imap.MailboxAttrHasNoChildren, imap.MailboxAttrJunk},
-			Delim:   '/',
-			Mailbox: "Junk",
-		})
-	} else {
-		pattern = strings.ReplaceAll(pattern, "/*", "/%")
-
-		db.Instance.Table("group").Where("user_id=? and full_path like ?", ctx.UserID, pattern).Find(&groups)
-
+	if err := db.Instance.Table("group").Where("user_id=? and full_path LIKE ?", ctx.UserID, name+"/%").Limit(1).Find(&groups); err != nil {
+		return false
 	}
-	for _, group := range groups {
-
-		data := &imap.ListData{
-			Attrs:   []imap.MailboxAttr{},
-			Mailbox: group.Name,
-			Delim:   '/',
-		}
-
-		if hasChildren(ctx, group.ID) {
-			data.Attrs = append(data.Attrs, imap.MailboxAttrHasChildren)
-		}
-
-		data.Mailbox = getLayerName(ctx, group, true)
-
-		w.WriteList(data)
-
-	}
+	return len(groups) > 0
 }
 
-func hasChildren(ctx *context.Context, id int) bool {
-	var parent []*models.Group
-	db.Instance.Table("group").Where("parent_id=?", id).Find(&parent)
-	return len(parent) > 0
-}
-
-func getLayerName(ctx *context.Context, item *models.Group, allPath bool) string {
-	if item.ParentId == 0 {
-		return item.Name
+func writeMailbox(w *imapserver.ListWriter, ctx *context.Context, name string, attrs []imap.MailboxAttr) {
+	if mailboxHasChildren(ctx, name) {
+		attrs = append(attrs, imap.MailboxAttrHasChildren)
 	}
-	var parent models.Group
-	_, _ = db.Instance.Table("group").Where("id=?", item.ParentId).Get(&parent)
-	if allPath {
-		return getLayerName(ctx, &parent, allPath) + "/" + item.Name
-	}
-	return getLayerName(ctx, &parent, allPath)
+	w.WriteList(&imap.ListData{
+		Attrs:   attrs,
+		Delim:   '/',
+		Mailbox: name,
+	})
 }
 
 func (s *serverSession) List(w *imapserver.ListWriter, ref string, patterns []string, options *imap.ListOptions) error {
 	log.WithContext(s.ctx).Debugf("imap server list, ref: %s ,patterns: %s ", ref, patterns)
 
-	if ref == "" && len(patterns) == 0 {
-		w.WriteList(&imap.ListData{
-			Attrs:   []imap.MailboxAttr{imap.MailboxAttrNoSelect, imap.MailboxAttrHasChildren},
-			Delim:   '/',
-			Mailbox: "[iMail]",
-		})
-	}
-	for _, pattern := range patterns {
-		matchGroup(s.ctx, w, ref, pattern)
+	ref = strings.TrimSuffix(strings.TrimSpace(ref), "/")
+	patterns = append([]string{}, patterns...)
+	if len(patterns) == 0 {
+		patterns = []string{""}
 	}
 
+	var custom []*models.Group
+	if err := db.Instance.Table("group").Where("user_id=?", s.ctx.UserID).Find(&custom); err != nil {
+		return err
+	}
+	written := map[string]bool{}
+
+	for _, pattern := range patterns {
+		combined := strings.TrimSpace(pattern)
+		if ref != "" {
+			if strings.HasPrefix(combined, "/") {
+				combined = ref + combined
+			} else {
+				combined = ref + "/" + combined
+			}
+		}
+		for _, box := range defaultMailboxes {
+			if mailboxMatch(box.name, combined) {
+				if !written[box.name] {
+					written[box.name] = true
+					writeMailbox(w, s.ctx, box.name, append([]imap.MailboxAttr{}, box.attrs...))
+				}
+			}
+		}
+		for _, item := range custom {
+			if mailboxMatch(item.FullPath, combined) {
+				if !written[item.FullPath] {
+					written[item.FullPath] = true
+					writeMailbox(w, s.ctx, item.FullPath, nil)
+				}
+			}
+		}
+	}
 	return nil
 }

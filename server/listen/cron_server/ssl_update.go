@@ -17,7 +17,7 @@ var expiredTime time.Time
 
 func Start() {
 	// On first start, wait until initialization completes
-	if config.Instance == nil || config.IsInit == false {
+	if config.Instance == nil || !config.IsInit {
 		for {
 			time.Sleep(1 * time.Minute)
 			if config.Instance != nil && config.IsInit {

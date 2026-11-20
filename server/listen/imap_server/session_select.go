@@ -9,15 +9,27 @@ import (
 )
 
 func (s *serverSession) Select(mailbox string, options *imap.SelectOptions) (*imap.SelectData, error) {
-	if "" == mailbox {
+	mailbox = strings.Trim(strings.TrimSpace(mailbox), `"`)
+	if strings.EqualFold(mailbox, "INBOX") {
+		mailbox = "INBOX"
+	}
+	if mailbox == "" {
 		return nil, &imap.Error{
 			Type: imap.StatusResponseTypeBad,
 			Text: "mailbox not found",
 		}
 	}
-
-	paths := strings.Split(mailbox, "/")
-	s.currentMailbox = strings.Trim(paths[len(paths)-1], `"`)
+	if !group.IsDefaultBox(mailbox) {
+		box, err := group.ResolveBox(s.ctx, mailbox)
+		if err != nil || box == nil || box.ID == 0 {
+			return nil, &imap.Error{
+				Type: imap.StatusResponseTypeNo,
+				Text: "Mailbox does not exist",
+			}
+		}
+		mailbox = box.FullPath
+	}
+	s.currentMailbox = mailbox
 	_, data := group.GetGroupStatus(s.ctx, s.currentMailbox, []string{"MESSAGES", "UNSEEN", "UIDNEXT", "UIDVALIDITY"})
 
 	ret := &imap.SelectData{

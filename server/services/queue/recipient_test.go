@@ -170,6 +170,9 @@ func TestFinalFailureStoresADeliveryStatusNotification(t *testing.T) {
 	if len(relations) != 1 || relations[0].UserID != sender.ID {
 		t.Fatalf("bounce mailbox relations = %+v, want the sender's mailbox", relations)
 	}
+	if relations[0].Status != consts.EmailStatusWait {
+		t.Fatalf("bounce relation status = %d, want the Inbox status", relations[0].Status)
+	}
 }
 
 func TestNoBounceIsSentToARemoteSender(t *testing.T) {
