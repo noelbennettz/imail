@@ -17,6 +17,12 @@ import (
 	"xorm.io/xorm"
 )
 
+// ApplyRules is set by the rule package so the queue can run the same rules on
+// a locally delivered copy that the SMTP inbound path runs. Keeping it as a
+// hook avoids a queue -> rule import cycle (rule already imports queue for
+// forwarding).
+var ApplyRules func(*context.Context, *models.Email, *models.User)
+
 func localDomains() []string {
 	if config.Instance == nil {
 		return nil
@@ -136,6 +142,11 @@ func deliverLocal(ctx *context.Context, original *models.Email, recipients []str
 			return nil
 		}); err != nil {
 			return fmt.Errorf("store local copy for %s: %w", address, err)
+		}
+		if ApplyRules != nil {
+			for _, user := range pending {
+				ApplyRules(ctx, &copyEmail, user)
+			}
 		}
 	}
 	return nil

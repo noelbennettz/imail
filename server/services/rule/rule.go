@@ -10,11 +10,31 @@ import (
 	"github.com/noelbennettz/imail/dto"
 	"github.com/noelbennettz/imail/dto/parsemail"
 	"github.com/noelbennettz/imail/models"
+	"github.com/noelbennettz/imail/services/queue"
 	"github.com/noelbennettz/imail/services/rule/match"
 	"github.com/noelbennettz/imail/utils/context"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
 )
+
+func init() {
+	queue.ApplyRules = applyToUser
+}
+
+// applyToUser runs the mailbox rules against a locally delivered copy, mirroring
+// what the SMTP inbound path does after parsing a message.
+func applyToUser(ctx *context.Context, model *models.Email, user *models.User) {
+	if model == nil || user == nil {
+		return
+	}
+	email := parsemail.NewEmailFromModel(*model)
+	email.MessageId = int64(model.Id)
+	for _, r := range GetAllRules(ctx, user.ID) {
+		if MatchRule(ctx, r, email) {
+			DoRule(ctx, r, email, user, []byte(model.RawMIME))
+		}
+	}
+}
 
 func GetAllRules(ctx *context.Context, userId int) []*dto.Rule {
 	var res []*models.Rule
