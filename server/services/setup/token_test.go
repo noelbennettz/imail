@@ -2,6 +2,7 @@ package setup
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -133,25 +134,38 @@ func TestBlockExpires(t *testing.T) {
 	}
 }
 
-// More than twenty failures in fifteen minutes disable verification globally,
-// even for the correct token.
-func TestGlobalLimit(t *testing.T) {
+// Failures spread over several addresses must not shut the API down for
+// everyone: there is no global counter any more, because a stranger could
+// otherwise keep a legitimate administrator out of their own first setup by
+// burning the shared budget.
+func TestFailuresAcrossAddressesKeepTokenUsable(t *testing.T) {
 	token := newTestToken(t)
 	wrong := strings.Repeat("z", tokenLength)
-	for address := 0; address < maxFailuresGlobal/maxFailuresPerAddress; address++ {
-		remote := "198.51.100." + string(rune('a'+address)) + ":1234"
-		for i := 0; i < maxFailuresPerAddress; i++ {
-			token.Verify(remote, wrong)
+
+	failures := 0
+	for address := 0; failures < 20; address++ {
+		remote := "198.51.100." + strconv.Itoa(address+1) + ":1234"
+		for i := 0; i < maxFailuresPerAddress-1; i++ {
+			if got := token.Verify(remote, wrong); got != VerifyRejected {
+				t.Fatalf("failure %d from %s = %v, want VerifyRejected", failures+1, remote, got)
+			}
+			failures++
 		}
 	}
-	if got := token.Verify("203.0.113.99:1234", token.Token()); got != VerifyRateLimited {
-		t.Fatalf("after the global limit = %v, want VerifyRateLimited", got)
+	if failures < 20 {
+		t.Fatalf("only %d failures driven, want at least 20", failures)
 	}
 
-	later := time.Now().Add(failureWindow + time.Second)
-	token.now = func() time.Time { return later }
+	// The per-address block still works: a fifth failure from one of those
+	// addresses locks it, and only that address.
+	if got := token.Verify("198.51.100.1:1234", wrong); got != VerifyRejected {
+		t.Fatalf("fifth failure = %v, want VerifyRejected", got)
+	}
+	if got := token.Verify("198.51.100.1:1234", token.Token()); got != VerifyRateLimited {
+		t.Fatalf("blocked address = %v, want VerifyRateLimited", got)
+	}
 	if got := token.Verify("203.0.113.99:1234", token.Token()); got != VerifyAllowed {
-		t.Fatalf("after the global window = %v, want VerifyAllowed", got)
+		t.Fatalf("correct token from a fresh address = %v, want VerifyAllowed", got)
 	}
 }
 

@@ -148,8 +148,8 @@ Open `http://<server-ip>/` and complete the wizard:
    is never written to `config/`, and is discarded once setup succeeds. Every
    wizard request carries it as the `X-Setup-Token` header. Missing or wrong
    tokens get `403`; after five failures from one address, further attempts get
-   `429` for fifteen minutes, and more than twenty failures in fifteen minutes
-   pause verification for everybody until the window drains. Only the static
+   `429` for fifteen minutes. The limit is per address, so a stranger cannot
+   lock the administrator out of their own first setup. Only the static
    client, `/api/ping` and a minimal status endpoint answer without a token.
 2. **Database** — SQLite is the default and works well for a small server.
    Choose MySQL or PostgreSQL if you already operate one.

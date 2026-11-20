@@ -27,9 +27,6 @@ const (
 
 	// maxFailuresPerAddress blocks one source address after this many failures.
 	maxFailuresPerAddress = 5
-	// maxFailuresGlobal temporarily refuses every verification attempt once the
-	// global failure count in the window is exceeded.
-	maxFailuresGlobal = 20
 	// failureWindow is both the length of the counting window and the length of
 	// a block applied after too many failures.
 	failureWindow = 15 * time.Minute
@@ -75,7 +72,6 @@ type SetupToken struct {
 	enabled   bool
 	now       func() time.Time
 	addresses map[string]*addressFailures
-	global    []time.Time
 }
 
 // NewSetupToken generates the one-time setup token. On an initialised
@@ -167,12 +163,10 @@ func (t *SetupToken) Clear() {
 	t.token = ""
 	t.enabled = false
 	t.addresses = map[string]*addressFailures{}
-	t.global = nil
 }
 
 // Verify checks a presented token against the current one. Failures are
-// counted per source address and globally; the token comparison itself takes
-// constant time.
+// counted per source address; the token comparison itself takes constant time.
 func (t *SetupToken) Verify(remoteAddr, presented string) VerifyResult {
 	if t == nil {
 		return VerifyClosed
@@ -189,7 +183,7 @@ func (t *SetupToken) Verify(remoteAddr, presented string) VerifyResult {
 	address := remoteAddress(remoteAddr)
 	t.pruneExpired(now)
 
-	if len(t.global) >= maxFailuresGlobal || t.blocked(address, now) {
+	if t.blocked(address, now) {
 		return VerifyRateLimited
 	}
 
@@ -209,11 +203,10 @@ func (t *SetupToken) blocked(address string, now time.Time) bool {
 	return entry.blockedUntil.After(now)
 }
 
-// recordFailure counts one failed attempt. The counters only ever expire, so a
-// flood cannot keep a legitimate administrator locked out forever.
+// recordFailure counts one failed attempt for an address. The per-address
+// counter only ever expires, so a flood cannot keep a legitimate administrator
+// locked out forever and cannot shut the setup API down for everyone.
 func (t *SetupToken) recordFailure(address string, now time.Time) {
-	t.global = append(t.global, now)
-
 	entry, ok := t.addresses[address]
 	if !ok || now.Sub(entry.windowStart) >= failureWindow {
 		entry = &addressFailures{windowStart: now}
@@ -227,14 +220,6 @@ func (t *SetupToken) recordFailure(address string, now time.Time) {
 }
 
 func (t *SetupToken) pruneExpired(now time.Time) {
-	kept := t.global[:0]
-	for _, at := range t.global {
-		if now.Sub(at) < failureWindow {
-			kept = append(kept, at)
-		}
-	}
-	t.global = kept
-
 	for address, entry := range t.addresses {
 		if !entry.blockedUntil.After(now) && now.Sub(entry.windowStart) >= failureWindow {
 			delete(t.addresses, address)

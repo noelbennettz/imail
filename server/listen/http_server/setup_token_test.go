@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -144,17 +145,23 @@ func TestSetupTokenPerAddressRateLimit(t *testing.T) {
 	}
 }
 
-// Twenty failures across many addresses disable verification globally.
-func TestSetupTokenGlobalRateLimit(t *testing.T) {
+// Failures spread over several addresses must not lock the API for everyone:
+// after twenty failures from other addresses the correct token still gets 200.
+func TestSetupTokenNotLockedOutByOtherAddresses(t *testing.T) {
 	f := newSetupFixture(t)
 	wrong := strings.Repeat("c", 24)
-	for i := 0; i < 20; i++ {
-		remote := "198.51.100." + string(rune('a'+i%8)) + ":" + string(rune('0'+i/8))
-		f.token.Verify(remote, wrong)
+	for address := 0; address < 5; address++ {
+		remote := "198.51.100." + strconv.Itoa(address+1) + ":1234"
+		for i := 0; i < 4; i++ {
+			if got := f.token.Verify(remote, wrong); got != setup.VerifyRejected {
+				t.Fatalf("failure %d from %s = %v, want VerifyRejected", address*4+i+1, remote, got)
+			}
+		}
 	}
-	resp, _ := f.setupCall(t, f.token.Token())
-	if resp.StatusCode != http.StatusTooManyRequests {
-		t.Fatalf("after the global limit = %d, want 429", resp.StatusCode)
+
+	resp, body := f.setupCall(t, f.token.Token())
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("after failures from other addresses = %d, want 200 (body %s)", resp.StatusCode, body)
 	}
 }
 
