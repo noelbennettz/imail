@@ -540,3 +540,27 @@ func TestWorkerKeepsAnInboxCopyWhenSendingToSelf(t *testing.T) {
 		t.Fatalf("self-send sent relation = %+v, want sent", sent)
 	}
 }
+
+func TestFinalDeliveryDoesNotResurrectADeletedSentCopy(t *testing.T) {
+	engine, _ := newTestEngine(t)
+	now := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
+	email := insertEmail(t, engine, "deleted-sent@example.com")
+	if _, err := engine.ID(email.Id).Cols("send_user_id").Update(&models.Email{SendUserID: 1}); err != nil {
+		t.Fatal(err)
+	}
+	entry := enqueueAt(t, engine, email, now, "recipient@example.net")
+	if _, err := engine.Table("user_email").Where("user_id=? and email_id=?", 1, email.Id).Update(map[string]interface{}{"status": consts.EmailStatusDel}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := MarkDelivered(&context.Context{}, &entry, now); err != nil {
+		t.Fatal(err)
+	}
+	var ue models.UserEmail
+	if _, err := engine.Where("user_id=? and email_id=?", 1, email.Id).Get(&ue); err != nil {
+		t.Fatal(err)
+	}
+	if ue.Status != consts.EmailStatusDel {
+		t.Fatalf("deleted sent copy status = %d, want it to stay deleted", ue.Status)
+	}
+}

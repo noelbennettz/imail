@@ -33,6 +33,9 @@ func CreateGroup(ctx *context.Context, name string, parentId int) (*models.Group
 	if len([]rune(name)) > 255 {
 		return nil, errors2.New("group name is too long")
 	}
+	if isReservedName(name) {
+		return nil, errors2.New("mailbox name is reserved")
+	}
 	if parentId > 0 {
 		var parent models.Group
 		found, err := db.Instance.Where("id=? and user_id=?", parentId, ctx.UserID).Get(&parent)
@@ -81,6 +84,9 @@ func RenameByPath(ctx *context.Context, oldPath, newPath string) error {
 	}
 
 	newName := strings.TrimSpace(pathLeaf(newPath))
+	if isReservedName(newName) {
+		return errors2.New("mailbox name is reserved")
+	}
 	newParentPath := pathParent(newPath)
 	var newParent *models.Group
 	if newParentPath != "" {
@@ -314,6 +320,15 @@ func getLayerName(ctx *context.Context, item *models.Group, allPath bool) string
 
 func IsDefaultBox(box string) bool {
 	return array.InArray(box, []string{"INBOX", "Sent Messages", "Drafts", "Deleted Messages", "Junk"})
+}
+
+func isReservedName(name string) bool {
+	for reserved := range models.GroupNameToCode {
+		if strings.EqualFold(name, reserved) {
+			return true
+		}
+	}
+	return false
 }
 
 func GetGroupStatus(ctx *context.Context, groupName string, params []string) (string, map[string]int) {

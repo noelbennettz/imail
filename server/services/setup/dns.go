@@ -22,6 +22,19 @@ type DNSItem struct {
 	Tips  string `json:"tips"`
 }
 
+func webHostLabel(webDomain, primary string) string {
+	webDomain = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(webDomain), "."))
+	primary = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(primary), "."))
+	if webDomain == "" || primary == "" || webDomain == primary {
+		return ""
+	}
+	suffix := "." + primary
+	if strings.HasSuffix(webDomain, suffix) {
+		return strings.TrimSuffix(webDomain, suffix)
+	}
+	return ""
+}
+
 func GetDNSSettings(ctx *context.Context) (map[string][]*DNSItem, error) {
 	configData, err := config.ReadConfig()
 	if err != nil {
@@ -38,10 +51,15 @@ func GetDNSSettings(ctx *context.Context) (map[string][]*DNSItem, error) {
 	hasAddress := false
 
 	for _, domain := range configData.Domains {
-		webHost := strings.ReplaceAll(configData.WebDomain, "."+configData.Domain, "")
 		records := []*DNSItem{}
+		hosts := []string{"smtp", "imap", "pop", "@"}
+		if strings.EqualFold(domain, configData.Domain) {
+			if webHost := webHostLabel(configData.WebDomain, configData.Domain); webHost != "" {
+				hosts = append(hosts, webHost)
+			}
+		}
 		addHosts := func(recordType, value, tips string) {
-			for _, host := range []string{webHost, "smtp", "imap", "pop", "@"} {
+			for _, host := range hosts {
 				records = append(records, &DNSItem{Type: recordType, Host: host, Value: value, TTL: 3600, Tips: tips})
 			}
 		}

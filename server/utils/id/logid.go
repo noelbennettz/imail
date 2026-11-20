@@ -2,26 +2,32 @@ package id
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
+	"sync"
 	"time"
 )
 
-var ip_instance string
+var (
+	ipOnce      sync.Once
+	ip_instance string
+)
 
 func getLocalIP() string {
-	if ip_instance != "" {
-		return ip_instance
-	}
+	ipOnce.Do(func() {
+		ip_instance = detectLocalIP()
+	})
+	return ip_instance
+}
 
+func detectLocalIP() string {
 	fallback := "127.0.0.1"
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		ip_instance = fallback
-		return ip_instance
+		return fallback
 	}
 	var v6 string
 	for _, a := range addrs {
@@ -30,8 +36,7 @@ func getLocalIP() string {
 			continue
 		}
 		if ipnet.IP.To4() != nil {
-			ip_instance = ipnet.IP.String()
-			return ip_instance
+			return ipnet.IP.String()
 		}
 		// IPv6-only hosts have no non-loopback IPv4 address; keep a global
 		// unicast IPv6 as the fallback instead of reporting loopback.
@@ -40,11 +45,9 @@ func getLocalIP() string {
 		}
 	}
 	if v6 != "" {
-		ip_instance = v6
-		return ip_instance
+		return v6
 	}
-	ip_instance = fallback
-	return ip_instance
+	return fallback
 }
 
 // addressPrefix returns four bytes derived from the local address. It works
@@ -62,7 +65,10 @@ func addressPrefix(address string) []byte {
 }
 
 func GenLogID() string {
-	r := rand.New(rand.NewSource(time.Now().UnixMicro()))
+	var randomBytes [3]byte
+	if _, err := rand.Read(randomBytes[:]); err != nil {
+		copy(randomBytes[:], []byte{byte(time.Now().UnixNano()), byte(os.Getpid()), byte(time.Now().UnixMicro())})
+	}
 
 	ip := getLocalIP()
 
@@ -76,7 +82,7 @@ func GenLogID() string {
 	b.WriteString(fmt.Sprintf("%x", timestamp&0xffffffff))
 	b.WriteString(fmt.Sprintf("%04x", timeNano&0xffff))
 	b.WriteString(fmt.Sprintf("%04x", pid&0xffff))
-	b.WriteString(fmt.Sprintf("%06x", r.Int31n(1<<24)))
+	b.WriteString(hex.EncodeToString(randomBytes[:]))
 	b.WriteString("b0")
 
 	return b.String()

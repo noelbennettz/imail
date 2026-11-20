@@ -313,12 +313,14 @@ func Init() {
 		}
 	}
 
-	err = json.Unmarshal(cfgData, &Instance)
-	Instance.ApplyDefaults()
-	Instance.fixPath()
-	if err != nil {
+	var loaded Config
+	if err := json.Unmarshal(cfgData, &loaded); err != nil {
+		log.Errorf("Invalid config file: %s", err.Error())
 		return
 	}
+	loaded.ApplyDefaults()
+	loaded.fixPath()
+	*Instance = loaded
 
 	if len(Instance.Domains) == 0 && Instance.Domain != "" {
 		Instance.Domains = []string{Instance.Domain}
@@ -368,8 +370,15 @@ func ReadPrivateKey() (*ecdsa.PrivateKey, bool) {
 	}
 
 	block, _ := pem.Decode(key)
-	x509Encoded := block.Bytes
-	privateKey, _ := x509.ParseECPrivateKey(x509Encoded)
+	if block == nil {
+		log.Warnf("account private key is not valid PEM, generating a new ACME account key")
+		return createNewPrivateKey(), true
+	}
+	privateKey, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil || privateKey == nil {
+		log.Warnf("account private key cannot be parsed (%v), generating a new ACME account key", err)
+		return createNewPrivateKey(), true
+	}
 
 	return privateKey, false
 }
@@ -380,12 +389,22 @@ func createNewPrivateKey() *ecdsa.PrivateKey {
 	if err != nil {
 		panic(err)
 	}
-	x509Encoded, _ := x509.MarshalECPrivateKey(privateKey)
+	x509Encoded, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		panic(err)
+	}
 
 	// Write the EC key to a PEM file
-	keypem, _ := os.OpenFile(ROOT_PATH+"./config/ssl/account_private.pem", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	err = pem.Encode(keypem, &pem.Block{Type: "EC PRIVATE KEY", Bytes: x509Encoded})
+	keyPath := ROOT_PATH + "./config/ssl/account_private.pem"
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o700); err != nil {
+		panic(err)
+	}
+	keypem, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
+		panic(err)
+	}
+	defer keypem.Close()
+	if err := pem.Encode(keypem, &pem.Block{Type: "EC PRIVATE KEY", Bytes: x509Encoded}); err != nil {
 		panic(err)
 	}
 	return privateKey

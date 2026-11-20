@@ -44,14 +44,37 @@ func SetAdminPassword(ctx *context.Context, account, pwd string) error {
 	if account == "" || len(pwd) < 8 {
 		return errors.New("account and a password of at least 8 characters are required")
 	}
+	if strings.ContainsAny(account, "@ \t\r\n/\\") {
+		return errors.New("account must not contain @ or whitespace")
+	}
 	encodePwd := password.Encode(pwd)
-	var user models.User = models.User{
+
+	// The wizard can be retried after a lost response. Update the account that
+	// was already created instead of inserting a second administrator.
+	var users []models.User
+	if err := db.Instance.OrderBy("id asc").Find(&users); err != nil {
+		return errors.Wrap(err)
+	}
+	if len(users) > 0 {
+		target := users[0]
+		_, err := db.Instance.Table(&models.User{}).Where("id=?", target.ID).Cols("account", "name", "password", "is_admin").Update(map[string]interface{}{
+			"account":  account,
+			"name":     "admin",
+			"password": encodePwd,
+			"is_admin": 1,
+		})
+		if err != nil {
+			return errors.Wrap(err)
+		}
+		return nil
+	}
+
+	user := models.User{
 		Account:  account,
 		Name:     "admin",
 		Password: encodePwd,
 		IsAdmin:  1,
 	}
-
 	_, err := db.Instance.Insert(&user)
 	if err != nil {
 		return errors.Wrap(err)

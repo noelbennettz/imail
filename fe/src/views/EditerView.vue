@@ -145,7 +145,7 @@ const editorConfig = {
 }
 
 editorConfig.MENU_CONF['uploadImage'] = {
-  base64LimitSize: 100 * 1024 * 1024 * 1024,
+  base64LimitSize: 10 * 1024 * 1024,
 }
 const mode = ref()
 const fileRef = ref();

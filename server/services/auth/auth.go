@@ -33,6 +33,34 @@ func HasAuth(ctx *context.Context, email *models.Email) bool {
 	return len(ue) != 0
 }
 
+func parseDKIMPrivateKey(data []byte) crypto.Signer {
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil
+	}
+	if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+		if signer, ok := key.(crypto.Signer); ok {
+			return signer
+		}
+	}
+	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+		return key
+	}
+	return nil
+}
+
+func dkimPublicValue(signer crypto.Signer) (string, error) {
+	pubBytes, err := x509.MarshalPKIXPublicKey(signer.Public())
+	if err != nil {
+		return "", err
+	}
+	return strings.Join([]string{
+		"v=DKIM1",
+		"k=rsa",
+		"p=" + base64.StdEncoding.EncodeToString(pubBytes),
+	}, "; "), nil
+}
+
 func DkimGen() string {
 	privatePath := config.Instance.DkimPrivateKeyPath
 	if strings.TrimSpace(privatePath) == "" {
@@ -43,6 +71,17 @@ func DkimGen() string {
 	publicKeyStr, _ := os.ReadFile(publicPath)
 	if len(privKeyStr) > 0 && len(publicKeyStr) > 0 {
 		return string(publicKeyStr)
+	}
+	// A private key without its public sibling is recoverable: derive the
+	// public key from it instead of silently generating a new key and breaking
+	// every DNS record that still advertises the old one.
+	if len(privKeyStr) > 0 {
+		if signer := parseDKIMPrivateKey(privKeyStr); signer != nil {
+			if publicKey, err := dkimPublicValue(signer); err == nil {
+				_ = os.WriteFile(publicPath, []byte(publicKey), 0o644)
+				return publicKey
+			}
+		}
 	}
 
 	var (

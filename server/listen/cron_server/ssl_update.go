@@ -45,7 +45,8 @@ func sslCheck() {
 	var err error
 	_, expiredTime, _, err = ssl.CheckSSLCrtInfo()
 	if err != nil {
-		panic(err)
+		log.Errorf("SSL initial check failed: %+v", err)
+		return
 	}
 
 	for {

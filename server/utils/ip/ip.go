@@ -12,10 +12,9 @@ import (
 )
 
 var (
-	ipv4Once sync.Once
-	ipv6Once sync.Once
-	ipv4     string
-	ipv6     string
+	addressMu sync.Mutex
+	ipv4      string
+	ipv6      string
 )
 
 // familyClient returns a client whose connections are pinned to one address
@@ -38,27 +37,32 @@ func familyClient(network string, timeout time.Duration) *http.Client {
 
 // GetIPv4 returns the public IPv4 address or "" when none is available.
 func GetIPv4() string {
-	ipv4Once.Do(func() {
-		ipv4 = detect(familyClient("tcp4", 5*time.Second),
-			"https://api.ipify.org", "https://ipv4.icanhazip.com")
-		if parsed := net.ParseIP(ipv4); parsed == nil || parsed.To4() == nil {
-			ipv4 = ""
-		}
-	})
+	addressMu.Lock()
+	defer addressMu.Unlock()
+	if ipv4 != "" {
+		return ipv4
+	}
+	value := detect(familyClient("tcp4", 5*time.Second),
+		"https://api.ipify.org", "https://ipv4.icanhazip.com")
+	if parsed := net.ParseIP(value); parsed != nil && parsed.To4() != nil {
+		ipv4 = value
+	}
 	return ipv4
 }
 
 // GetIPv6 returns the public IPv6 address or "" when the host has no IPv6
 // connectivity.
 func GetIPv6() string {
-	ipv6Once.Do(func() {
-		ipv6 = detect(familyClient("tcp6", 5*time.Second),
-			"https://api6.ipify.org", "https://ipv6.icanhazip.com")
-		parsed := net.ParseIP(ipv6)
-		if parsed == nil || parsed.To4() != nil {
-			ipv6 = ""
-		}
-	})
+	addressMu.Lock()
+	defer addressMu.Unlock()
+	if ipv6 != "" {
+		return ipv6
+	}
+	value := detect(familyClient("tcp6", 5*time.Second),
+		"https://api6.ipify.org", "https://ipv6.icanhazip.com")
+	if parsed := net.ParseIP(value); parsed != nil && parsed.To4() == nil {
+		ipv6 = value
+	}
 	return ipv6
 }
 

@@ -11,6 +11,19 @@ import (
 	"github.com/spf13/cast"
 )
 
+func uniqueInts(in []int) []int {
+	seen := make(map[int]struct{}, len(in))
+	out := make([]int, 0, len(in))
+	for _, value := range in {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
 func (s *serverSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) error {
 	if uids == nil && len(s.deleteUidList) == 0 {
 		return nil
@@ -19,7 +32,19 @@ func (s *serverSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) 
 
 	if uids != nil {
 		for _, uidRange := range *uids {
-			if uidRange.Start > 0 && uidRange.Stop > 0 {
+			if uidRange.Start == 0 {
+				continue
+			}
+			if uidRange.Stop == 0 {
+				// UID ranges use 0 for "*"; expand through the mailbox query
+				// instead of looping to the maximum uint32.
+				rows := list.GetEmailListByGroup(s.ctx, s.currentMailbox, list.ImapListReq{Star: cast.ToInt(uint32(uidRange.Start))}, true)
+				for _, row := range rows {
+					uidList = append(uidList, row.UeId)
+				}
+				continue
+			}
+			if uidRange.Stop > 0 {
 				if uidRange.Stop-uidRange.Start > 10000 {
 					return &imap.Error{Type: imap.StatusResponseTypeNo, Text: "UID range is too large"}
 				}
@@ -33,6 +58,7 @@ func (s *serverSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) 
 	if len(s.deleteUidList) > 0 {
 		uidList = append(uidList, s.deleteUidList...)
 	}
+	uidList = uniqueInts(uidList)
 
 	if len(uidList) == 0 {
 		return nil

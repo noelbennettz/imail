@@ -284,7 +284,9 @@ func setEmailResult(session *xorm.Session, emailID int, status int8, errorText a
 		return nil
 	}
 	if _, err := session.Exec(db.WithContext(nil, `update user_email
-		set status=? where email_id=? and user_id=? and status <> ?`), status, emailID, owner.SendUserID, consts.EmailStatusWait); err != nil {
+		set status=? where email_id=? and user_id=? and status in (?, ?, ?)`),
+		status, emailID, owner.SendUserID,
+		consts.EmailStatusSent, consts.EmailStatusFail, consts.EmailStatusDeliveryPending); err != nil {
 		return err
 	}
 	return nil

@@ -25,7 +25,9 @@ type userCreateRequest struct {
 	Account  string `json:"account"`
 	Username string `json:"username"`
 	Password string `json:"password"`
-	Disabled int    `json:"disabled"`
+	// Disabled is a pointer so an edit request that omits it keeps the current
+	// state instead of silently enabling a disabled mailbox.
+	Disabled *int `json:"disabled"`
 	// Domain assigns the mailbox to one of the configured domains.
 	Domain string `json:"domain"`
 	// QuotaMB sets the mailbox limit in MiB. nil keeps the current value on
@@ -103,6 +105,14 @@ func CreateUser(ctx *context.Context, w http.ResponseWriter, req *http.Request) 
 		user.Quota = config.Instance.DefaultQuotaBytes()
 	}
 
+	if found, err := db.Instance.Table("user").Where("account=?", reqData.Account).Exist(); err != nil {
+		response.NewErrorResponse(response.ServerError, err.Error(), "").FPrint(w)
+		return
+	} else if found {
+		response.NewErrorResponse(response.ParamsError, "Account already exists", "").FPrint(w)
+		return
+	}
+
 	_, err = db.Instance.Insert(&user)
 	if err != nil {
 		response.NewErrorResponse(response.ServerError, err.Error(), "").FPrint(w)
@@ -152,6 +162,11 @@ func UserList(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		domain = strings.ToLower(config.Instance.Domain)
 	}
 	session := db.Instance.Table(&models.User{}).Where("LOWER(domain) = ?", domain)
+	if strings.EqualFold(domain, config.Instance.Domain) {
+		// Accounts created before domains were introduced have no domain and
+		// belong to the primary mailbox domain.
+		session = db.Instance.Table(&models.User{}).Where("(LOWER(domain) = ? OR domain = '')", domain)
+	}
 	totalNum, err := session.Limit(reqData.PageSize, offset).FindAndCount(&users)
 	if err != nil {
 		log.Errorf("%+v", err)
@@ -225,8 +240,21 @@ func EditUser(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		response.NewErrorResponse(response.ParamsError, "User not found", "").FPrint(w)
 		return
 	}
-	revokeSessions := reqData.Password != "" || reqData.Disabled != user.Disabled
-	updates := map[string]interface{}{"disabled": reqData.Disabled}
+	disabled := user.Disabled
+	if reqData.Disabled != nil {
+		disabled = *reqData.Disabled
+		if disabled != 0 {
+			disabled = 1
+		}
+	}
+	revokeSessions := reqData.Password != "" || disabled != user.Disabled
+	updates := map[string]interface{}{}
+	if reqData.Disabled != nil {
+		updates["disabled"] = disabled
+		if disabled != user.Disabled {
+			user.Disabled = disabled
+		}
+	}
 	if reqData.Username != "" && reqData.Username != user.Name {
 		user.Name = reqData.Username
 		updates["name"] = user.Name
@@ -244,9 +272,6 @@ func EditUser(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		updates["domain"] = user.Domain
 	}
 
-	if reqData.Disabled != user.Disabled {
-		user.Disabled = reqData.Disabled
-	}
 	if reqData.Password != "" {
 		if len(reqData.Password) < 8 {
 			response.NewErrorResponse(response.ParamsError, "Password must be at least 8 characters", "").FPrint(w)
@@ -254,6 +279,11 @@ func EditUser(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		}
 		user.Password = password.Encode(reqData.Password)
 		updates["password"] = user.Password
+	}
+
+	if len(updates) == 0 {
+		response.NewSuccessResponse(user).FPrint(w)
+		return
 	}
 
 	update := db.Instance.Table(&models.User{}).ID(user.ID)

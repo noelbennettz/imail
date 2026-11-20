@@ -153,6 +153,9 @@ func IssueForDomain(domain, mode, provider, token string) error {
 
 	privateKey, newAccount := config.ReadPrivateKey()
 	issuerPath := filepath.Join(filepath.Dir(certPath), "issuer.crt")
+	if !reserveIssuance() {
+		return errors.New("another certificate request is already in progress")
+	}
 	go func() {
 		if err := obtainCertificate(cfg, domains, sslType, provider, token, keyPath, certPath, issuerPath, newAccount, privateKey); err != nil {
 			log.Errorf("domain %s certificate issuance failed: %+v", domain, err)

@@ -30,11 +30,11 @@
               ></el-input>
             </div>
             
-            <div class="node-actions" v-if="data.id !== 0">
+            <div class="node-actions" v-if="isCustomGroup(data.id)">
               <el-button @click.stop="add(data)" size="small" type="primary" text bg class="action-btn">
                 <el-icon><Plus /></el-icon>
               </el-button>
-              <el-button @click.stop="del(node, data)" size="small" type="danger" text bg class="action-btn">
+              <el-button @click.stop="del(data)" size="small" type="danger" text bg class="action-btn">
                 <el-icon><Delete /></el-icon>
               </el-button>
             </div>
@@ -59,35 +59,44 @@ import { ElMessage } from "element-plus";
 import { Folder, Delete, Plus } from "@element-plus/icons-vue";
 
 const data = reactive([]);
+const defaultGroupIds = new Set([2000000000, 2000000001, 2000000002, 2000000003, 2000000004]);
+
+const isCustomGroup = (id) => typeof id === 'number' && id > 0 && !defaultGroupIds.has(id);
+
+const reload = () => {
+  http.get("/api/group").then((res) => {
+    if (res.errorNo !== 0 || !Array.isArray(res.data)) return;
+    data.splice(0, data.length);
+    data.push(...res.data);
+  });
+};
 
 http.get("/api/group").then((res) => {
-  data.push(...res.data);
+  if (res.errorNo === 0 && Array.isArray(res.data)) data.push(...res.data);
 });
 
-const del = function (node, dataObj) {
-  if (dataObj.id !== -1) {
-    http.post("/api/group/del", { id: dataObj.id }).then((res) => {
-      if (res.errorNo !== 0) {
-        ElMessage({ message: res.errorMsg, type: "error" });
-      } else {
-        const pc = node.parent.childNodes;
-        for (let i = 0; i < pc.length; i++) {
-          if (pc[i].id === node.id) {
-            pc.splice(i, 1);
-            return;
-          }
-        }
-      }
-    });
-  } else {
-    const pc = node.parent.childNodes;
-    for (let i = 0; i < pc.length; i++) {
-      if (pc[i].id === node.id) {
-        pc.splice(i, 1);
-        return;
-      }
-    }
+const removeNode = (items, target) => {
+  const index = items.indexOf(target);
+  if (index >= 0) {
+    items.splice(index, 1);
+    return true;
   }
+  return items.some((item) => Array.isArray(item.children) && removeNode(item.children, target));
+};
+
+const del = function (dataObj) {
+  if (dataObj.id === -1) {
+    removeNode(data, dataObj);
+    return;
+  }
+  if (!isCustomGroup(dataObj.id)) return;
+  http.post("/api/group/del", { id: dataObj.id }).then((res) => {
+    if (res.errorNo !== 0) {
+      ElMessage({ message: res.errorMsg, type: "error" });
+    } else {
+      reload();
+    }
+  });
 };
 
 const add = function (item) {

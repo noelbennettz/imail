@@ -121,6 +121,10 @@ func genSQL(ctx *context.Context, count bool, tagInfo dto.SearchTag, keyword str
 		sqlParams = append(sqlParams, "%"+keyword+"%", "%"+keyword+"%")
 	}
 
+	if count {
+		return sql, sqlParams
+	}
+
 	if limit <= 0 {
 		limit = 10
 	}
@@ -184,7 +188,7 @@ func userEmailRowsSQL(ctx *context.Context, groupName string, byUID bool, req Im
 	params = append(params, boxArgs...)
 
 	if byUID {
-		sql := "SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM " + table + " WHERE user_id = ? AND " + boxSQL
+		sql := "SELECT id,email_id, is_read, status, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM " + table + " WHERE user_id = ? AND " + boxSQL
 		if len(req.UidList) > 0 {
 			sql += " AND id IN (" + placeholders(len(req.UidList)) + ")"
 			params = append(params, intsToAny(req.UidList)...)
@@ -201,7 +205,7 @@ func userEmailRowsSQL(ctx *context.Context, groupName string, byUID bool, req Im
 		return sql, params, true
 	}
 
-	sql := "SELECT * FROM (SELECT id,email_id, is_read, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM " + table + " WHERE user_id = ? AND " + boxSQL + ") a"
+	sql := "SELECT * FROM (SELECT id,email_id, is_read, status, ROW_NUMBER() OVER (ORDER BY id) AS serial_number FROM " + table + " WHERE user_id = ? AND " + boxSQL + ") a"
 	if len(req.UidList) > 0 {
 		sql += " WHERE serial_number IN (" + placeholders(len(req.UidList)) + ")"
 		params = append(params, intsToAny(req.UidList)...)

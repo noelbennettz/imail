@@ -14,6 +14,7 @@ type Callback func(params any)
 
 type Async struct {
 	wg        *sync.WaitGroup
+	mu        sync.Mutex
 	lastError error
 	ctx       *context.Context
 }
@@ -25,6 +26,8 @@ func New(ctx *context.Context) *Async {
 }
 
 func (as *Async) LastError() error {
+	as.mu.Lock()
+	defer as.mu.Unlock()
 	return as.lastError
 }
 
@@ -43,7 +46,10 @@ func (as *Async) Process(callback Callback, params any) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				as.lastError = as.HandleErrRecover(err)
+				parsed := as.HandleErrRecover(err)
+				as.mu.Lock()
+				as.lastError = parsed
+				as.mu.Unlock()
 			}
 		}()
 		callback(params)
@@ -59,9 +65,9 @@ func (as *Async) Wait() {
 
 // HandleErrRecover recovers from a panic
 func (as *Async) HandleErrRecover(err interface{}) (returnErr error) {
-	switch err.(type) {
+	switch typed := err.(type) {
 	case error:
-		returnErr = err.(error)
+		returnErr = typed
 	default:
 		returnErr = errors.New(cast.ToString(err))
 	}

@@ -63,6 +63,19 @@ func setStatus(state, message string) {
 	statusMu.Unlock()
 }
 
+// reserveIssuance atomically marks a certificate request as pending. It keeps
+// two quick clicks (or a renewal racing the settings page) from running ACME
+// twice for the same deployment.
+func reserveIssuance() bool {
+	statusMu.Lock()
+	defer statusMu.Unlock()
+	if status.State == StatusPending {
+		return false
+	}
+	status = Status{State: StatusPending, Message: "Requesting certificate..."}
+	return true
+}
+
 func (u *MyUser) GetEmail() string {
 	return u.Email
 }
@@ -78,7 +91,7 @@ func (u *MyUser) GetPrivateKey() crypto.PrivateKey {
 func GetSSL() string {
 	cfg, err := config.ReadConfig()
 	if err != nil {
-		panic(err)
+		return config.SSLTypeAutoHTTP
 	}
 	if cfg.SSLType == "" {
 		return config.SSLTypeAutoHTTP
@@ -90,7 +103,7 @@ func GetSSL() string {
 func SetSSL(sslType, priKey, crtKey string) error {
 	cfg, err := config.ReadConfig()
 	if err != nil {
-		panic(err)
+		return errors.Wrap(err)
 	}
 	if sslType == config.SSLTypeAutoHTTP || sslType == config.SSLTypeUser || sslType == config.SSLTypeAutoDNS {
 		cfg.SSLType = sslType
@@ -329,7 +342,7 @@ func generateCertificate(privateKey *ecdsa.PrivateKey, cfg *config.Config, newAc
 func GenSSL(update bool) error {
 	cfg, err := config.ReadConfig()
 	if err != nil {
-		panic(err)
+		return errors.Wrap(err)
 	}
 
 	if !update {
@@ -436,7 +449,7 @@ func UploadCertificate(keyPEM, certPEM string) error {
 func CheckSSLCrtInfo() (int, time.Time, bool, error) {
 	cfg, err := config.ReadConfig()
 	if err != nil {
-		panic(err)
+		return -1, time.Now(), true, errors.Wrap(err)
 	}
 	// load cert and key by tls.LoadX509KeyPair
 	tlsCert, err := tls.LoadX509KeyPair(cfg.SSLPublicKeyPath, cfg.SSLPrivateKeyPath)
@@ -458,7 +471,7 @@ func CheckSSLCrtInfo() (int, time.Time, bool, error) {
 	}
 
 	// Check the expiration time
-	hours := cert.NotAfter.Sub(time.Now()).Hours()
+	hours := time.Until(cert.NotAfter).Hours()
 
 	if hours <= 0 {
 		return -1, time.Now(), nameMatchFail, errors.New("Certificate has expired")

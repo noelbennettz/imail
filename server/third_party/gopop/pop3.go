@@ -67,6 +67,7 @@ func (s *Server) Start() error {
 
 func (s *Server) startWithTLS() error {
 	if s.lck.TryLock() {
+		defer s.lck.Unlock()
 		listener, err := tls.Listen(s.listenNetwork(), s.listenAddress(), s.TlsConfig)
 		if err != nil {
 			return err
@@ -99,6 +100,7 @@ func (s *Server) startWithTLS() error {
 
 func (s *Server) startWithoutTLS() error {
 	if s.lck.TryLock() {
+		defer s.lck.Unlock()
 		listener, err := net.Listen(s.listenNetwork(), s.listenAddress())
 		if err != nil {
 			return err
@@ -194,6 +196,11 @@ func (s *Server) handleClient(conn net.Conn) {
 			capa<CRLF>  the capa command returns the list of commands the server supports
 		*/
 
+		if session.Status != TRANSACTION && requiresTransaction(cmd) {
+			fmt.Fprintf(conn, "-ERR authorization required%s", eol)
+			continue
+		}
+
 		switch cmd {
 		case "CAPA":
 			commands, err := s.Action.Capa(session)
@@ -272,10 +279,8 @@ func (s *Server) handleClient(conn net.Conn) {
 					if err != nil {
 						fmt.Fprintf(conn, "-ERR %s %s", err.Error(), eol)
 					} else {
-						ret := fmt.Sprintf("+OK%s", eol)
-						ret += fmt.Sprintf("%s%s", res, eol)
-						ret += "." + eol
-						fmt.Fprint(conn, ret)
+						fmt.Fprintf(conn, "+OK%s", eol)
+						writePOP3Data(conn, res)
 					}
 				}
 			}
@@ -289,10 +294,8 @@ func (s *Server) handleClient(conn net.Conn) {
 					if err != nil {
 						fmt.Fprintf(conn, "-ERR %s %s", err.Error(), eol)
 					} else {
-						ret := fmt.Sprintf("+OK %d%s", size, eol)
-						ret += fmt.Sprintf("%s%s", res, eol)
-						ret += "." + eol
-						fmt.Fprint(conn, ret)
+						fmt.Fprintf(conn, "+OK %d%s", size, eol)
+						writePOP3Data(conn, res)
 					}
 				}
 			}
@@ -323,9 +326,10 @@ func (s *Server) handleClient(conn net.Conn) {
 		case "QUIT":
 			if session.Status == TRANSACTION {
 				s.Action.Quit(session)
-				fmt.Fprintf(conn, "+OK Bye %s", eol)
-				conn.Close()
 			}
+			fmt.Fprintf(conn, "+OK Bye %s", eol)
+			conn.Close()
+			return
 		case "NOOP":
 			fmt.Fprintf(conn, "+OK%s", eol)
 		case "STLS":
@@ -369,6 +373,31 @@ func (s *Server) handleClient(conn net.Conn) {
 		}
 
 	}
+}
+
+// requiresTransaction lists the commands that RFC 1939 only allows after PASS.
+func requiresTransaction(cmd string) bool {
+	switch cmd {
+	case "STAT", "LIST", "UIDL", "TOP", "RETR", "DELE", "REST":
+		return true
+	default:
+		return false
+	}
+}
+
+// writePOP3Data writes a multi-line response and dot-stuffs lines that start
+// with '.', as required by RFC 1939.
+func writePOP3Data(conn net.Conn, payload string) {
+	payload = strings.TrimRight(payload, "\r\n")
+	lines := strings.Split(strings.ReplaceAll(payload, "\r\n", "\n"), "\n")
+	for _, line := range lines {
+		line = strings.TrimSuffix(line, "\r")
+		if strings.HasPrefix(line, ".") {
+			line = "." + line
+		}
+		fmt.Fprintf(conn, "%s\r\n", line)
+	}
+	fmt.Fprint(conn, ".\r\n")
 }
 
 // cuts the line into command and arguments

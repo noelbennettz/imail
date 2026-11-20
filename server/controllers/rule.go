@@ -31,10 +31,13 @@ func UpsertRule(ctx *context.Context, w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	var data *dto.Rule
-	err = json.Unmarshal(requestBody, &data)
-	if err != nil {
-		response.NewErrorResponse(response.ParamsError, "params error", err).FPrint(w)
+	var data dto.Rule
+	if err := json.Unmarshal(requestBody, &data); err != nil {
+		response.NewErrorResponse(response.ParamsError, "params error", err.Error()).FPrint(w)
+		return
+	}
+	if data.Action < dto.READ || data.Action > dto.MOVE {
+		response.NewErrorResponse(response.ParamsError, "params error", "unknown rule action").FPrint(w)
 		return
 	}
 

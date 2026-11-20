@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ import (
 	"github.com/noelbennettz/imail/signal"
 	"github.com/noelbennettz/imail/utils/context"
 	"github.com/noelbennettz/imail/utils/errors"
+	"github.com/noelbennettz/imail/utils/tlsutil"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -47,6 +49,9 @@ func DomainList(ctx *context.Context, w http.ResponseWriter, req *http.Request) 
 	byDomain := make(map[string]int64, len(counts))
 	for _, item := range counts {
 		byDomain[item.Domain] = item.Count
+	}
+	if primary := strings.ToLower(config.Instance.Domain); primary != "" {
+		byDomain[primary] += byDomain[""]
 	}
 
 	list := make([]domainView, 0, len(config.Instance.Domains))
@@ -152,11 +157,18 @@ func DelDomain(ctx *context.Context, w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	cfg.Domains = kept
+	if cfg.DomainCertificates != nil {
+		delete(cfg.DomainCertificates, domain)
+	}
 	if err := config.WriteConfig(cfg); err != nil {
 		response.NewErrorResponse(response.ServerError, "Unable to save configuration", "").FPrint(w)
 		return
 	}
+	_ = os.RemoveAll(tlsutil.DomainCertDir(domain))
 	config.Instance.Domains = kept
+	if config.Instance.DomainCertificates != nil {
+		delete(config.Instance.DomainCertificates, domain)
+	}
 	log.Infof("Domain removed: %s", domain)
 	response.NewSuccessResponse("Domain removed").FPrint(w)
 	scheduleRestart()
