@@ -900,9 +900,13 @@ const handleDelete = async () => {
     padding: 10px 12px;
   }
 
-  /* One primary action plus an overflow menu beats a scrolling button row. */
-  .action-buttons {
+  /* Keep Reply; the rest live in the overflow menu. */
+  .action-buttons > .el-button:not(:first-child) {
     display: none;
+  }
+
+  .action-buttons {
+    width: auto;
   }
 
   .mobile-more {
