@@ -180,3 +180,25 @@ test('conversation view groups replies from different participants', async (t) =
   const badge = await page.$eval('.thread-count', el => el.textContent.trim())
   assert.equal(badge, '2')
 })
+
+test('a long snippet never pushes the date outside its row', async (t) => {
+  const long = [{
+    id: 3, title: 'A message with a very long preview', desc: 'long '.repeat(120),
+    datetime: new Date().toISOString(), is_read: true,
+    sender: {Name: 'Ada', EmailAddress: 'ada@example.org'}, to: [], dangerous: false, error: '',
+  }]
+  const page = await openApp({listReply: () => ({errorNo: 0, data: {current_page: 1, total_page: 1, list: long}})})
+  t.after(() => page.close())
+  await page.goto(`${baseURL}/#/`, {waitUntil: 'domcontentloaded'})
+  await page.waitForSelector('.mail-row-content')
+  const metrics = await page.evaluate(() => [...document.querySelectorAll('.mail-row-content')].map(row => {
+    const rect = row.getBoundingClientRect()
+    const cell = row.closest('td').getBoundingClientRect()
+    return {rowRight: rect.right, cellRight: cell.right, scroll: row.scrollWidth, client: row.clientWidth}
+  }))
+  assert.ok(metrics.length > 0)
+  for (const m of metrics) {
+    assert.ok(m.rowRight <= m.cellRight + 1, `row overflows its cell: ${JSON.stringify(m)}`)
+    assert.ok(m.scroll <= m.client + 1, `row content overflows: ${JSON.stringify(m)}`)
+  }
+})

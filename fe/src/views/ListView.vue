@@ -506,7 +506,8 @@ const pageChange = function (p) {
 .mail-main-info {
   display: flex;
   align-items: center;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   gap: 12px;
 }
 
@@ -582,7 +583,8 @@ const pageChange = function (p) {
 }
 
 .mail-meta {
-  min-width: 80px;
+  flex: 0 0 92px;
+  min-width: 92px;
   text-align: right;
   padding-right: 16px;
 }
