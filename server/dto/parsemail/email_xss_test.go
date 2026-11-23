@@ -438,3 +438,10 @@ func TestXSSInMultipleFields(t *testing.T) {
 		t.Errorf("Subject should keep safe text, got: %q", email.Subject)
 	}
 }
+
+func TestSanitizeHTMLKeepsContentIDSources(t *testing.T) {
+	got := sanitizeHTML(`<p><img src="cid:offsite1" alt="offsite"></p>`)
+	if !strings.Contains(got, `src="cid:offsite1"`) {
+		t.Fatalf("inline image lost its cid source: %q", got)
+	}
+}

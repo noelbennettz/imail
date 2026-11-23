@@ -119,6 +119,8 @@ onBeforeUnmount(disconnect)
 
 .image-gate-action {
   margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
   padding: 6px 14px;
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 999px;

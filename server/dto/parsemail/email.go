@@ -140,7 +140,10 @@ func init() {
 	relaxedPolicy.AllowElements("style")
 	relaxedPolicy.AllowAttrs("type").OnElements("style")
 
-	relaxedPolicy.AllowURLSchemes("http", "https", "mailto")
+	// cid: points at an inline part of the same message; the detail view rewrites it
+	// to /attachments/<id>/<content-id>. Dropping the scheme left inline images as
+	// broken <img> tags without a source.
+	relaxedPolicy.AllowURLSchemes("http", "https", "mailto", "cid")
 
 	relaxedPolicy.SkipElementsContent("script", "object", "embed", "iframe", "frame", "frameset")
 }

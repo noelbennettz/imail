@@ -960,6 +960,10 @@ const delFile = function (index) {
     overflow-x: auto;
   }
 
+  .editor-content :deep(.w-e-toolbar .w-e-bar) {
+    flex-wrap: nowrap;
+  }
+
   .editor-content :deep(.w-e-text-container) {
     min-height: 260px;
   }

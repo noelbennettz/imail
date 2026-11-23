@@ -913,6 +913,21 @@ const handleDelete = async () => {
     padding: 16px 12px calc(16px + env(safe-area-inset-bottom));
   }
 
+  /* Keep the date and sender on one compact line; the header already has the
+     overflow menu for this message. */
+  .meta-right {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+    padding-left: 52px;
+  }
+
+  .meta-right .message-menu-btn {
+    display: none;
+  }
+
   .mail-subject {
     font-size: 20px;
   }
