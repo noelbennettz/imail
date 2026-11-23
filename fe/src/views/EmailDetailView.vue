@@ -928,6 +928,12 @@ const handleDelete = async () => {
     display: none;
   }
 
+  /* The name is enough on a phone; the full address stays available in the
+     message source and on reply. */
+  .sender-email {
+    display: none;
+  }
+
   .mail-subject {
     font-size: 20px;
   }

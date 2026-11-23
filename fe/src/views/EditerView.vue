@@ -599,7 +599,7 @@ const delFile = function (index) {
   background: transparent;
 }
 
-.editor-content :deep(.w-e-toolbar),
+.editor-toolbar :deep(.w-e-toolbar),
 .editor-content :deep(.w-e-text-container) {
   background: var(--md-sys-color-surface-container-lowest) !important;
   border: 1px solid var(--md-sys-color-outline-variant) !important;
@@ -858,12 +858,12 @@ const delFile = function (index) {
   border-right-color: transparent !important;
 }
 
-:root[data-theme="dark"] .editor-content :deep(.w-e-bar) {
+:root[data-theme="dark"] .editor-toolbar :deep(.w-e-bar) {
   background: var(--pm-surface-glass-soft) !important;
   color: var(--pm-text-primary) !important;
 }
 
-:root[data-theme="dark"] .editor-content :deep(.w-e-bar-item button),
+:root[data-theme="dark"] .editor-toolbar :deep(.w-e-bar-item button),
 :root[data-theme="dark"] .editor-content :deep(.w-e-menu-tooltip-v5) {
   color: var(--pm-text-primary) !important;
 }
@@ -884,7 +884,7 @@ const delFile = function (index) {
 </style>
 <style scoped>
 /* Material 3 editor toolbar */
-.editor-content :deep(.w-e-toolbar) {
+.editor-toolbar :deep(.w-e-toolbar) {
   padding: 8px;
   gap: 2px;
   flex-wrap: wrap;
@@ -893,23 +893,23 @@ const delFile = function (index) {
   border-radius: var(--md-sys-shape-corner-large) var(--md-sys-shape-corner-large) 0 0;
 }
 
-.editor-content :deep(.w-e-bar-item) {
+.editor-toolbar :deep(.w-e-bar-item) {
   padding: 2px;
 }
 
-.editor-content :deep(.w-e-bar-item button) {
+.editor-toolbar :deep(.w-e-bar-item button) {
   width: 32px;
   height: 32px;
   border-radius: var(--md-sys-shape-corner-small);
   color: var(--md-sys-color-on-surface-variant);
 }
 
-.editor-content :deep(.w-e-bar-item button:hover) {
+.editor-toolbar :deep(.w-e-bar-item button:hover) {
   background: var(--md-sys-color-surface-container-highest);
   color: var(--md-sys-color-on-surface);
 }
 
-.editor-content :deep(.w-e-bar-divider) {
+.editor-toolbar :deep(.w-e-bar-divider) {
   background: var(--md-sys-color-outline-variant);
   margin: 4px;
 }
@@ -955,12 +955,12 @@ const delFile = function (index) {
     letter-spacing: .04em;
   }
 
-  .editor-content :deep(.w-e-toolbar) {
+  .editor-toolbar :deep(.w-e-toolbar) {
     flex-wrap: nowrap;
     overflow-x: auto;
   }
 
-  .editor-content :deep(.w-e-toolbar .w-e-bar) {
+  .editor-toolbar :deep(.w-e-toolbar .w-e-bar) {
     flex-wrap: nowrap;
   }
 
@@ -1012,7 +1012,7 @@ const delFile = function (index) {
     min-height: 42vh;
   }
 
-  .editor-content :deep(.w-e-toolbar) {
+  .editor-toolbar :deep(.w-e-toolbar) {
     flex-wrap: nowrap;
     overflow-x: auto;
   }
