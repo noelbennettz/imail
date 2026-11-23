@@ -233,7 +233,7 @@ onMounted(() => {
 }
 
 .sidebar-footer {
-  padding: 12px 12px 16px;
+  padding: 12px 12px calc(16px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--pm-border-color);
   margin-top: auto;
 }

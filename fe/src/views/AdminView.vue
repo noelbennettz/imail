@@ -126,6 +126,9 @@ onMounted(() => {
 }
 
 .admin-app-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -281,4 +284,18 @@ onMounted(() => {
     max-width: 100%;
   }
 }
+@media (max-width: 768px) {
+  .admin-nav {
+    scrollbar-width: none;
+  }
+
+  .admin-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-content {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}
+
 </style>

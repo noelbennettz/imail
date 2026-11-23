@@ -121,12 +121,33 @@
           @current-change="pageChange"
       />
     </div>
+
+    <div v-if="hasSelection" class="mobile-bulk-bar" role="toolbar" :aria-label="lang.actions">
+      <span class="bulk-count">{{ selectedRows.length }}</span>
+      <button type="button" class="bulk-btn" :aria-label="lang.select_all_btn" @click="selectAll"><el-icon><CircleCheck/></el-icon></button>
+      <button type="button" class="bulk-btn" :aria-label="lang.invert_selection_btn" @click="invertSelection"><el-icon><Switch/></el-icon></button>
+      <button type="button" class="bulk-btn" :aria-label="lang.read_btn" @click="markRead"><el-icon><View/></el-icon></button>
+      <el-dropdown class="bulk-dropdown" trigger="click">
+        <button type="button" class="bulk-btn" :aria-label="lang.move_btn"><el-icon><Folder/></el-icon></button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item v-for="group in groupList" :key="group.id" @click="move(group.id, group.name)">{{ group.name }}</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <button type="button" class="bulk-btn danger" :aria-label="lang.del_btn" @click="del"><el-icon><Delete/></el-icon></button>
+      <button type="button" class="bulk-btn" :aria-label="lang.close" @click="clearSelection"><el-icon><Close/></el-icon></button>
+    </div>
+
+    <button v-if="!hasSelection" type="button" class="compose-fab" :aria-label="lang.compose" @click="router.push('/editer')">
+      <el-icon><EditPen/></el-icon>
+    </button>
   </div>
 </template>
 
 <script setup>
 import {EpArrowDownBold} from "vue-icons-plus/ep";
-import {Delete, View, Folder, EditPen, Warning, WarningFilled, CircleCheck, Switch, Message} from "@element-plus/icons-vue";
+import {Delete, View, Folder, EditPen, Warning, WarningFilled, CircleCheck, Switch, Message, Close} from "@element-plus/icons-vue";
 import {useRoute, useRouter} from 'vue-router'
 import {ref, watch, computed} from 'vue'
 import useGroupStore from '../stores/group'
@@ -279,6 +300,11 @@ const selectionChange = (rows) => {
 const selectAll = () => {
   taskTableDataRef.value?.clearSelection()
   data.value.forEach(row => taskTableDataRef.value?.toggleRowSelection(row, true))
+}
+
+const clearSelection = () => {
+  taskTableDataRef.value?.clearSelection()
+  selectedRows.value = []
 }
 
 const invertSelection = () => {
@@ -688,46 +714,167 @@ const pageChange = function (p) {
 
 @media (max-width: 768px) {
   .list-view-container {
-    /* [core fix] On mobile the height must be computed explicitly, subtracting the Mobile Header height (usually about 56px); use dvh so scrolling is not clipped */
-    height: calc(100dvh - 56px);
-    min-height: auto;
-    padding: 12px; /* Reduce padding on mobile to leave more visible space */
+    padding: 12px 10px calc(88px + env(safe-area-inset-bottom));
+    border-radius: var(--md-sys-shape-corner-large);
   }
 
   .list-header {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 8px;
   }
+
+  .header-title h2 {
+    font-size: 20px;
+  }
+
   .header-actions {
-    width: 100%;
-    overflow-x: auto;
-    padding-bottom: 4px;
+    width: auto;
+    flex-wrap: nowrap;
+    overflow: visible;
+    gap: 6px;
   }
+
+  /* Bulk actions move to a thumb-reachable bar at the bottom. */
+  .selection-actions,
+  .compose-btn {
+    display: none;
+  }
+
+  .view-toggle {
+    height: 34px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
   .mail-main-info {
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: 2px;
   }
+
   .mail-sender {
-    width: 100%;
+    width: auto;
+    max-width: 62%;
+    font-size: 13px;
   }
+
   .mail-subject {
     max-width: 100%;
+    font-size: 13px;
   }
+
   .mail-snippet {
     display: none;
   }
+
   .mail-row-content {
     align-items: flex-start;
+    gap: 8px;
   }
+
   .mail-meta {
-    padding-top: 2px;
+    min-width: 64px;
+    padding: 2px 4px 0 0;
+  }
+
+  .modern-mail-table :deep(td.el-table__cell) {
+    padding: 10px 0;
+  }
+
+  .pagination-wrapper {
+    margin-top: 6px;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 
+.compose-fab {
+  display: none;
+}
+
+.mobile-bulk-bar {
+  display: none;
+}
+
 @media (max-width: 768px) {
-  .modern-mail-table :deep(.selection-col) {
-    display: none;
+  .compose-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border: 0;
+    border-radius: 18px;
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    font-size: 22px;
+    box-shadow: var(--md-sys-elevation-3);
+    cursor: pointer;
+  }
+
+  .compose-fab:active {
+    transform: scale(.96);
+  }
+
+  .mobile-bulk-bar {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 60px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--md-sys-color-surface-container-highest);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    box-shadow: var(--md-sys-elevation-2);
+  }
+
+  .bulk-count {
+    min-width: 28px;
+    margin-right: 2px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .bulk-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    height: 44px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  .bulk-btn:hover {
+    background: var(--md-sys-color-surface-container-high);
+  }
+
+  .bulk-btn.danger {
+    color: var(--md-sys-color-error);
+  }
+
+  .bulk-dropdown {
+    flex: 1;
+  }
+
+  .bulk-dropdown .bulk-btn {
+    width: 100%;
   }
 }
 </style>

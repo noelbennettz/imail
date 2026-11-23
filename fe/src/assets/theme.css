@@ -532,15 +532,6 @@ h1, h2, h3, h4 {
   }
 }
 
-@media (max-width: 768px) {
-  .list-view-container {
-    height: calc(100dvh - 76px) !important;
-    min-height: 0 !important;
-    border-radius: var(--md-sys-shape-corner-large);
-    padding: 10px !important;
-  }
-}
-
 /* M3 menus: no arrow, no hard border, clear state layers */
 .el-popper__arrow {
   display: none !important;

@@ -10,6 +10,8 @@ import useGroupStore from '@/stores/group'
 
 const route = useRoute()
 const pageName = ref(route.name)
+const drawerSize = 'min(300px, 86vw)'
+
 const globalStatus = useGlobalStatusStore();
 const groupStore = useGroupStore();
 const isAuthPage = computed(() => pageName.value === 'login' || pageName.value === 'setup')
@@ -55,7 +57,7 @@ watch(
           v-if="!isAuthPage && pageName !== 'settings'"
           v-model="globalStatus.mobileDrawerVisible"
           direction="ltr"
-          size="243px"
+:size="drawerSize"
           :with-header="false"
           class="mobile-aside-drawer"
       >
@@ -108,7 +110,7 @@ watch(
 }
 
 #main {
-  height: 100%;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
 }

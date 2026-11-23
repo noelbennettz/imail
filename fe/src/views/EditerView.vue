@@ -90,7 +90,7 @@
         <div class="compose-row subject-row">
           <el-form-item prop="subject" class="w-full m-0 border-less-input">
             <el-input v-model="ruleForm.subject" :placeholder="lang.subject_ph"></el-input>
-            <div class="cc-bcc-toggle" @click="showCcBcc = !showCcBcc" v-if="!showCcBcc">Cc/Bcc</div>
+            <button type="button" class="cc-bcc-toggle" :aria-expanded="showCcBcc" @click="showCcBcc = !showCcBcc" v-if="!showCcBcc">Cc/Bcc</button>
           </el-form-item>
         </div>
 
@@ -964,4 +964,58 @@ const delFile = function (index) {
     min-height: 260px;
   }
 }
+@media (max-width: 768px) {
+  .composer-container {
+    border-radius: var(--md-sys-shape-corner-large);
+  }
+
+  /* Keep Send reachable while the form scrolls. */
+  .composer-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--md-sys-color-surface-container-low);
+  }
+
+  .composer-title {
+    font-size: 18px;
+  }
+
+  .composer-body {
+    padding: 0 12px 12px;
+  }
+
+  .compose-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 8px 0;
+  }
+
+  .field-label {
+    width: auto;
+    padding: 4px 2px 0;
+  }
+
+  .composer-actions .el-button {
+    height: 36px;
+    padding: 0 10px;
+  }
+
+  .editor-wrapper {
+    min-height: 42vh;
+  }
+
+  .editor-content :deep(.w-e-toolbar) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .attachments-preview {
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+  }
+}
+
 </style>

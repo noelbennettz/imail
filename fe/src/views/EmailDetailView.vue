@@ -18,6 +18,18 @@
           <el-icon><Delete /></el-icon>
         </el-button>
       </div>
+      <el-dropdown class="mobile-more" trigger="click" @command="onMobileCommand">
+        <button type="button" class="message-menu-btn" :aria-label="lang.more_actions">
+          <el-icon><MoreFilled/></el-icon>
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="reply_all">{{ lang.reply_all }}</el-dropdown-item>
+            <el-dropdown-item command="forward">{{ lang.forward }}</el-dropdown-item>
+            <el-dropdown-item command="delete" divided>{{ lang.del_btn }}</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </div>
 
     <div class="mail-detail-content" ref="contentRef" @scroll.passive="onContentScroll">
@@ -404,6 +416,14 @@ const copySource = async () => {
   } catch {
     ElMessage.error(lang.clipboard_unavailable)
   }
+}
+
+const onMobileCommand = (command) => {
+  if (command === 'delete') {
+    handleDelete()
+    return
+  }
+  compose(command)
 }
 
 const handleMessageCommand = (command, message) => {
@@ -866,4 +886,40 @@ const handleDelete = async () => {
     padding: 4px 0 12px;
   }
 }
+.mobile-more {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mail-detail-header {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  /* One primary action plus an overflow menu beats a scrolling button row. */
+  .action-buttons {
+    display: none;
+  }
+
+  .mobile-more {
+    display: inline-flex;
+  }
+
+  .mail-detail-content {
+    padding: 16px 12px calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .mail-subject {
+    font-size: 20px;
+  }
+
+  .attachments-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 </style>
