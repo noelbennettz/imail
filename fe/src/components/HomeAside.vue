@@ -25,6 +25,7 @@
           type="button"
           class="menu-item"
           :class="{active: isActive(item), child: item.depth > 0}"
+          :aria-current="isActive(item) ? 'page' : undefined"
           :style="{paddingLeft: `${10 + item.depth * 16}px`}"
           @click="selectGroup(item)"
       >

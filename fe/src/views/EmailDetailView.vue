@@ -517,11 +517,9 @@ const handleDelete = async () => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--pm-surface-glass);
-  border-radius: var(--pm-radius-xl);
-  box-shadow: var(--pm-shadow-md);
-  border: 1px solid var(--pm-glass-border);
-  backdrop-filter: blur(18px);
+  background: var(--md-sys-color-surface-container-lowest);
+  border-radius: var(--md-sys-shape-corner-large);
+  border: 1px solid var(--md-sys-color-outline-variant);
   overflow: hidden;
 }
 
@@ -530,8 +528,8 @@ const handleDelete = async () => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--pm-border-color);
-  background: var(--pm-surface-glass-soft);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container-low);
 }
 
 .back-btn {

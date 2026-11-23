@@ -48,7 +48,7 @@
   --md-sys-elevation-3: 0 4px 8px 3px rgba(0, 0, 0, .15), 0 1px 3px rgba(0, 0, 0, .3);
   --md-sys-elevation-4: 0 6px 10px 4px rgba(0, 0, 0, .15), 0 2px 3px rgba(0, 0, 0, .3);
 
-  --md-sys-typescale-body-font: 'Roboto', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --md-sys-typescale-body-font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --md-sys-typescale-body-size: 15px;
   --md-sys-typescale-label-size: 13px;
   --md-sys-typescale-title-size: 20px;

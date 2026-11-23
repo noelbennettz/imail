@@ -271,5 +271,7 @@ export default {
   "status": "الحالة",
   "cert_request_failed": "تعذّر طلب الشهادة",
   "warning_title": "تحذير",
-  "email_body": "نص الرسالة"
+  "email_body": "نص الرسالة",
+  "images_blocked": "تم حظر {count} صورة بعيدة حفاظًا على الخصوصية.",
+  "load_images": "تحميل الصور"
 }

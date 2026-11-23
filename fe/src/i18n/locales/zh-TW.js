@@ -271,5 +271,7 @@ export default {
   "status": "狀態",
   "cert_request_failed": "憑證申請失敗",
   "warning_title": "警告",
-  "email_body": "郵件內容"
+  "email_body": "郵件內容",
+  "images_blocked": "已阻擋 {count} 張遠端圖片以保護隱私。",
+  "load_images": "載入圖片"
 }

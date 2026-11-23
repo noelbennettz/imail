@@ -271,5 +271,7 @@ export default {
   "status": "Status",
   "cert_request_failed": "Certificate request failed",
   "warning_title": "Warning",
-  "email_body": "Email body"
+  "email_body": "Email body",
+  "images_blocked": "{count} remote image(s) blocked for privacy.",
+  "load_images": "Load images"
 }

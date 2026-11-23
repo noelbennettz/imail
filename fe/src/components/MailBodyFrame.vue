@@ -1,30 +1,50 @@
 <template>
-  <iframe
-    ref="frame"
-    class="mail-body-frame"
-    :title="lang.email_body"
-    :srcdoc="srcdoc"
-    :style="{ height: `${height}px` }"
-    sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-    referrerpolicy="no-referrer"
-    @load="syncHeight"
-  />
+  <div class="mail-body">
+    <div v-if="blockedCount > 0 && !showImages" class="image-gate">
+      <el-icon><Picture/></el-icon>
+      <span>{{ lang.images_blocked.replace('{count}', blockedCount) }}</span>
+      <button type="button" class="image-gate-action" @click="showImages = true">{{ lang.load_images }}</button>
+    </div>
+    <iframe
+      ref="frame"
+      class="mail-body-frame"
+      :title="lang.email_body"
+      :srcdoc="srcdoc"
+      :style="{ height: `${height}px` }"
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      referrerpolicy="no-referrer"
+      @load="syncHeight"
+    />
+  </div>
 </template>
 
 <script setup>
 import {computed, onBeforeUnmount, ref, watch} from 'vue'
-import lang from '@/i18n/i18n'
+import {Picture} from '@element-plus/icons-vue'
+import lang from '../i18n/i18n'
 
 const props = defineProps({
   html: {type: String, default: ''}
 })
 
+// Tracking pixels are the reason mail clients ask before loading remote images.
+// A broken transparent GIF keeps the layout while the request stays local.
+const REMOTE_IMG = /(<img\b[^>]*?\bsrc\s*=\s*["'])(?:https?:)?\/\/[^"']*/gi
+const BLANK_IMG = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+
 const frame = ref(null)
 const maxHeight = 1200
 const height = ref(200)
+const showImages = ref(false)
 let resizeObserver
 
-const srcdoc = computed(() => `<!DOCTYPE html>
+const blockedCount = computed(() => (props.html.match(REMOTE_IMG) || []).length)
+
+const srcdoc = computed(() => {
+  const html = showImages.value
+      ? props.html
+      : props.html.replace(REMOTE_IMG, `$1${BLANK_IMG}"`)
+  return `<!DOCTYPE html>
 <base target="_blank">
 <style>
   html, body {
@@ -41,7 +61,8 @@ const srcdoc = computed(() => `<!DOCTYPE html>
     html, body { color: #f5f7fa; }
   }
 </style>
-${props.html}`)
+${html}`
+})
 
 function disconnect() {
   resizeObserver?.disconnect()
@@ -64,6 +85,12 @@ function syncHeight() {
   resizeObserver.observe(doc.body)
 }
 
+watch(() => props.html, () => {
+  showImages.value = false
+  disconnect()
+  height.value = 200
+})
+
 watch(srcdoc, () => {
   disconnect()
   height.value = 200
@@ -73,6 +100,39 @@ onBeforeUnmount(disconnect)
 </script>
 
 <style scoped>
+.mail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.image-gate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 13px;
+}
+
+.image-gate-action {
+  margin-left: auto;
+  padding: 6px 14px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.image-gate-action:hover {
+  background: var(--md-sys-color-surface-container-highest);
+}
+
 .mail-body-frame {
   display: block;
   width: 100%;

@@ -271,5 +271,7 @@ export default {
   "status": "状态",
   "cert_request_failed": "证书申请失败",
   "warning_title": "警告",
-  "email_body": "邮件内容"
+  "email_body": "邮件内容",
+  "images_blocked": "已拦截 {count} 张远程图片以保护隐私。",
+  "load_images": "加载图片"
 }

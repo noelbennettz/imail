@@ -271,5 +271,7 @@ export default {
   "status": "Statut",
   "cert_request_failed": "Échec de la demande de certificat",
   "warning_title": "Avertissement",
-  "email_body": "Contenu du message"
+  "email_body": "Contenu du message",
+  "images_blocked": "{count} image(s) distante(s) bloquée(s) pour votre confidentialité.",
+  "load_images": "Charger les images"
 }

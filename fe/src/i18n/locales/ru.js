@@ -271,5 +271,7 @@ export default {
   "status": "Статус",
   "cert_request_failed": "Не удалось запросить сертификат",
   "warning_title": "Внимание",
-  "email_body": "Текст письма"
+  "email_body": "Текст письма",
+  "images_blocked": "Заблокировано внешних изображений: {count}.",
+  "load_images": "Загрузить изображения"
 }

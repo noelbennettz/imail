@@ -97,10 +97,10 @@
                 <div class="mail-sender">
                   {{ scope.row.sender.Name !== '' ? scope.row.sender.Name : scope.row.sender.EmailAddress }}
                 </div>
-                <div class="mail-subject">
+                <button type="button" class="mail-subject" @click.stop="rowClick(scope.row)">
                   {{ scope.row.title || lang.no_subject }}
                   <span v-if="scope.row.thread_count > 1" class="thread-count">{{ scope.row.thread_count }}</span>
-                </div>
+                </button>
                 <div class="mail-snippet">{{ scope.row.desc }}</div>
               </div>
               <div class="mail-meta">
@@ -368,14 +368,11 @@ const pageChange = function (p) {
 .list-view-container {
   display: flex;
   flex-direction: column;
-  /* [core fix] Prefer the parent's height while keeping the viewport height as a floor */
   height: 100%;
-  min-height: 100vh;
-  background: var(--pm-surface-glass);
-  border: 1px solid var(--pm-glass-border);
-  border-radius: var(--pm-radius-xl);
-  box-shadow: var(--pm-shadow-md);
-  backdrop-filter: blur(16px);
+  min-height: 0;
+  background: var(--md-sys-color-surface-container-lowest);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-large);
   padding: 18px;
   overflow: hidden;
 }
@@ -391,7 +388,7 @@ const pageChange = function (p) {
 }
 
 .header-title h2 {
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 600;
   color: var(--pm-text-primary);
   margin: 0;
@@ -446,10 +443,9 @@ const pageChange = function (p) {
   min-height: 0;
   flex: 1;
   overflow: hidden;
-  background: var(--pm-surface-glass);
-  border-radius: var(--pm-radius-lg);
-  border: 1px solid var(--pm-border-color);
-  box-shadow: inset 0 1px 0 var(--pm-glass-border);
+  background: var(--md-sys-color-surface-container-lowest);
+  border-radius: var(--md-sys-shape-corner-medium);
+  border: 1px solid var(--md-sys-color-outline-variant);
 }
 
 .modern-mail-table {
@@ -502,11 +498,23 @@ const pageChange = function (p) {
 .mail-subject {
   flex: 0 1 auto;
   max-width: 40%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font: inherit;
   font-weight: 500;
   color: var(--pm-text-primary);
+  cursor: pointer;
+}
+
+.mail-subject:focus-visible {
+  outline: 3px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .thread-count {
