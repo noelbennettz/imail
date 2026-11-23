@@ -12,7 +12,7 @@
         :defaultExpandAll="true"
         class="custom-tree"
       >
-        <template #default="{ node, data }">
+        <template #default="{ data }">
           <div class="tree-node-content">
             <div class="node-label">
               <el-icon class="folder-icon"><Folder /></el-icon>

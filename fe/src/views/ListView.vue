@@ -8,33 +8,34 @@
         <el-button class="action-btn view-toggle" plain @click="toggleConversation">
           {{ conversationMode ? lang.messages : lang.conversations }}
         </el-button>
-        <div class="selection-actions">
-          <el-button @click="selectAll" class="action-btn selection-btn" plain :disabled="data.length === 0">
+        <div class="selection-actions" v-if="hasSelection">
+          <span class="selection-count">{{ selectedRows.length }}</span>
+          <el-button @click="selectAll" class="action-btn selection-btn" plain>
             <el-icon><CircleCheck /></el-icon> {{ lang.select_all_btn }}
           </el-button>
-          <el-button @click="invertSelection" class="action-btn selection-btn" plain :disabled="data.length === 0">
+          <el-button @click="invertSelection" class="action-btn selection-btn" plain>
             <el-icon><Switch /></el-icon> {{ lang.invert_selection_btn }}
           </el-button>
-        </div>
-        <el-button @click="del" class="action-btn" plain>
-          <el-icon><Delete /></el-icon> {{ lang.del_btn }}
-        </el-button>
-        <el-button @click="markRead" class="action-btn" plain>
-          <el-icon><View /></el-icon> {{ lang.read_btn }}
-        </el-button>
-        <el-dropdown class="move-dropdown">
-          <el-button class="action-btn" plain>
-            <el-icon><Folder /></el-icon> {{ lang.move_btn }}
-            <el-icon class="el-icon--right"><EpArrowDownBold/></el-icon>
+          <el-button @click="del" class="action-btn" plain>
+            <el-icon><Delete /></el-icon> {{ lang.del_btn }}
           </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="move(group.id,group.name)" v-for="group in groupList" :key="group.id">
-                {{ group.name }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+          <el-button @click="markRead" class="action-btn" plain>
+            <el-icon><View /></el-icon> {{ lang.read_btn }}
+          </el-button>
+          <el-dropdown class="move-dropdown">
+            <el-button class="action-btn" plain>
+              <el-icon><Folder /></el-icon> {{ lang.move_btn }}
+              <el-icon class="el-icon--right"><EpArrowDownBold/></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="move(group.id,group.name)" v-for="group in groupList" :key="group.id">
+                  {{ group.name }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
         <el-button type="primary" class="compose-btn" @click="router.push('/editer')">
           <el-icon><EditPen /></el-icon> {{ lang.compose }}
         </el-button>
@@ -42,7 +43,29 @@
     </div>
 
     <div class="list-content">
-      <el-table height="100%"
+      <div v-if="loading && data.length === 0" class="skeleton-list" role="status" aria-live="polite">
+        <span class="visually-hidden">{{ lang.loading }}</span>
+        <div v-for="n in 8" :key="n" class="skeleton-row" aria-hidden="true">
+          <span class="skeleton-dot"/>
+          <span class="skeleton-line w-20"/>
+          <span class="skeleton-line w-45"/>
+          <span class="skeleton-line w-10"/>
+        </div>
+      </div>
+
+      <div v-else-if="loadError" class="list-state" role="alert">
+        <el-icon class="state-icon"><WarningFilled/></el-icon>
+        <p class="state-title">{{ loadError }}</p>
+        <el-button @click="refresh" class="state-action">{{ lang.retry }}</el-button>
+      </div>
+
+      <div v-else-if="data.length === 0" class="list-state">
+        <el-icon class="state-icon"><Message/></el-icon>
+        <p class="state-title">{{ keyword ? lang.empty_search : lang.empty_folder }}</p>
+        <el-button v-if="keyword" text class="state-action" @click="clearSearch">{{ lang.clear_search }}</el-button>
+      </div>
+
+      <el-table v-else height="100%"
                 ref="taskTableDataRef"
                 :data="data"
                 :show-header="false"
@@ -75,7 +98,7 @@
                   {{ scope.row.sender.Name !== '' ? scope.row.sender.Name : scope.row.sender.EmailAddress }}
                 </div>
                 <div class="mail-subject">
-                  {{ scope.row.title }}
+                  {{ scope.row.title || lang.no_subject }}
                   <span v-if="scope.row.thread_count > 1" class="thread-count">{{ scope.row.thread_count }}</span>
                 </div>
                 <div class="mail-snippet">{{ scope.row.desc }}</div>
@@ -89,11 +112,12 @@
       </el-table>
     </div>
 
-    <div class="pagination-wrapper" v-if="totalPage > 0">
+    <div class="pagination-wrapper" v-if="totalPage > 1">
       <el-pagination
           background
           layout="prev, pager, next"
           :page-count="totalPage"
+          :current-page="currentPage"
           @current-change="pageChange"
       />
     </div>
@@ -102,13 +126,14 @@
 
 <script setup>
 import {EpArrowDownBold} from "vue-icons-plus/ep";
-import {Delete, View, Folder, EditPen, Warning, CircleCheck, Switch} from "@element-plus/icons-vue";
+import {Delete, View, Folder, EditPen, Warning, WarningFilled, CircleCheck, Switch, Message} from "@element-plus/icons-vue";
 import {useRoute, useRouter} from 'vue-router'
 import {ref, watch, computed} from 'vue'
 import useGroupStore from '../stores/group'
 import lang from '../i18n/i18n';
 import {http} from "@/utils/axios";
-import {ElMessage, ElMessageBox} from "element-plus";
+import {confirmAction} from "@/utils/confirm";
+import {ElMessage} from "element-plus";
 
 const router = useRouter();
 const route = useRoute();
@@ -116,32 +141,30 @@ const groupStore = useGroupStore()
 const groupList = ref([])
 const taskTableDataRef = ref(null)
 const selectedRows = ref([])
-let tag = groupStore.tag;
-
-if (tag === "") {
-  tag = '{"type":0,"status":-1}'
-}
-
-watch(groupStore, async (newV) => {
-  tag = newV.tag;
-  if (tag === "") {
-    tag = '{"type":0,"status":-1}'
-  }
-  rawData.value = []
-  data.value = []
-  updateList()
-})
-
 const data = ref([])
 const rawData = ref([])
 const totalPage = ref(0)
+const currentPage = ref(1)
+const pageSize = 15
+const loading = ref(false)
+const loadError = ref('')
 const conversationMode = ref(localStorage.getItem('imail-view-mode') !== 'list')
 const keyword = computed(() => String(route.query.q || ''))
+const hasSelection = computed(() => selectedRows.value.length > 0)
 
-const threadKey = (subject) => (subject || '')
-    .replace(/^((re|fwd|fw|回复|回覆|答复|回覆|轉寄|转发)\s*:\s*)+/i, '')
-    .trim()
-    .toLowerCase()
+const defaultTag = () => (groupStore.tag || '{"type":0,"status":-1}')
+
+// Conversation grouping is a client-side view of the current page, so it keys on
+// the normalized subject *and* the other party. Subject alone merged unrelated
+// mail from different senders.
+const threadKey = (row) => {
+  const subject = (row.title || '')
+      .replace(/^((re|fwd|fw|回复|回覆|答复|转寄|轉寄|转发)\s*:\s*)+/i, '')
+      .trim()
+      .toLowerCase()
+  const sender = String(row.sender?.EmailAddress || '').toLowerCase()
+  return `${subject}|${sender}` || ('id:' + row.id)
+}
 
 const applyView = (list) => {
   if (!conversationMode.value) {
@@ -149,7 +172,7 @@ const applyView = (list) => {
   }
   const groups = new Map()
   for (const item of list) {
-    const key = threadKey(item.title) || ('id:' + item.id)
+    const key = threadKey(item)
     if (!groups.has(key)) {
       groups.set(key, {...item, thread_count: 1, thread_ids: [item.id]})
       continue
@@ -171,6 +194,7 @@ const applyView = (list) => {
 const setData = (list) => {
   rawData.value = list || []
   data.value = applyView(rawData.value)
+  selectedRows.value = []
 }
 
 const toggleConversation = () => {
@@ -179,24 +203,55 @@ const toggleConversation = () => {
   data.value = applyView(rawData.value)
 }
 
-const updateList = function () {
-  http.post("/api/email/list", {tag: tag, page_size: 15, keyword: keyword.value}).then(res => {
-    setData(res.data.list)
+// An empty page after deleting or moving the last rows is normal, not an error:
+// step back one page instead of showing an empty folder.
+const fetchList = function (page = currentPage.value) {
+  loading.value = true
+  loadError.value = ''
+  http.post("/api/email/list", {
+    tag: defaultTag(),
+    page_size: pageSize,
+    current_page: page,
+    keyword: keyword.value
+  }).then(res => {
+    if (res.errorNo !== 0) {
+      loadError.value = res.errorMsg || lang.load_failed
+      return
+    }
+    currentPage.value = res.data.current_page || page
     totalPage.value = res.data.total_page || 0
+    setData(res.data.list)
+    if (data.value.length === 0 && currentPage.value > 1) {
+      return fetchList(currentPage.value - 1)
+    }
+  }).catch(err => {
+    loadError.value = err?.userMessage || lang.load_failed
+  }).finally(() => {
+    loading.value = false
   })
 }
+
+const refresh = () => fetchList()
 
 const updateGroupList = function () {
-  http.post("/api/group/list").then(res => {
-    groupList.value = res.data || []
-  })
+  http.post("/api/group/list", {}, {silent: true}).then(res => {
+    if (res.errorNo === 0) groupList.value = res.data || []
+  }).catch(() => {})
 }
 
-updateList()
+fetchList()
 updateGroupList()
 
+watch(() => groupStore.tag, () => {
+  currentPage.value = 1
+  setData([])
+  fetchList(1)
+})
+
 watch(() => route.query.q, () => {
-  updateList()
+  currentPage.value = 1
+  setData([])
+  fetchList(1)
 })
 
 const rowClick = function (row) {
@@ -207,11 +262,14 @@ const rowClick = function (row) {
 const formatShortDate = (dateStr) => {
   if (!dateStr) return "";
   const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "";
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
   }
-  return d.toLocaleDateString([], {month: 'short', day: 'numeric'});
+  const options = {month: 'short', day: 'numeric'};
+  if (d.getFullYear() !== now.getFullYear()) options.year = 'numeric';
+  return d.toLocaleDateString([], options);
 }
 
 const selectionChange = (rows) => {
@@ -231,65 +289,66 @@ const invertSelection = () => {
 }
 
 const markRead = function () {
-  let rows = taskTableDataRef.value?.getSelectionRows()
+  const rows = taskTableDataRef.value?.getSelectionRows()
   if (!rows || rows.length === 0) {
-    ElMessage.warning('Select emails first');
-    return;
+    ElMessage.warning(lang.select_first)
+    return
   }
-  let ids = rows.map(e => e.id);
+  const ids = rows.map(e => e.id)
   http.post("/api/email/read", {"ids": ids}).then(res => {
     if (res.errorNo === 0) {
-      updateList()
-      ElMessage.success('Marked as read');
+      refresh()
+      ElMessage.success(lang.marked_read)
     } else {
       ElMessage.error(res.errorMsg)
     }
-  })
+  }).catch(() => {})
 }
 
-const move = function (group_id, group_name) {
-  let rows = taskTableDataRef.value?.getSelectionRows()
+const move = async function (group_id, group_name) {
+  const rows = taskTableDataRef.value?.getSelectionRows()
   if (!rows || rows.length === 0) {
-    ElMessage.warning('Select emails first');
-    return;
+    ElMessage.warning(lang.select_first)
+    return
   }
-  let ids = rows.map(e => e.id);
-
-  ElMessageBox.confirm(lang.move_email_confirm, 'Warning', {
-    confirmButtonText: 'OK', cancelButtonText: 'Cancel', type: 'warning'
-  }).then(() => {
-    http.post("/api/email/move", {"group_id": group_id, "group_name": group_name, "ids": ids}).then(res => {
-      if (res.errorNo === 0) {
-        updateList()
-        ElMessage.success('Move completed')
-      } else {
-        ElMessage.error(res.errorMsg)
-      }
-    })
-  }).catch(()=>{})
+  const ids = rows.map(e => e.id)
+  if (!await confirmAction(lang.move_email_confirm)) return
+  http.post("/api/email/move", {"group_id": group_id, "group_name": group_name, "ids": ids}).then(res => {
+    if (res.errorNo === 0) {
+      refresh()
+      ElMessage.success(lang.moved)
+    } else {
+      ElMessage.error(res.errorMsg)
+    }
+  }).catch(() => {})
 }
 
-const del = function () {
-  let rows = taskTableDataRef.value?.getSelectionRows()
+const del = async function () {
+  const rows = taskTableDataRef.value?.getSelectionRows()
   if (!rows || rows.length === 0) {
-    ElMessage.warning('Select emails first');
-    return;
+    ElMessage.warning(lang.select_first)
+    return
   }
-  let ids = rows.map(e => e.id);
-  let groupTag = JSON.parse(tag)
+  const ids = rows.map(e => e.id)
+  let groupTag = {}
+  try {
+    groupTag = JSON.parse(defaultTag())
+  } catch {
+    groupTag = {}
+  }
+  if (!await confirmAction(lang.del_email_confirm)) return
+  http.post("/api/email/del", {"ids": ids, "forcedDel": groupTag.status === 3}).then(res => {
+    if (res.errorNo === 0) {
+      refresh()
+      ElMessage.success(lang.deleted)
+    } else {
+      ElMessage.error(res.errorMsg)
+    }
+  }).catch(() => {})
+}
 
-  ElMessageBox.confirm(lang.del_email_confirm, 'Warning', {
-    confirmButtonText: 'OK', cancelButtonText: 'Cancel', type: 'warning'
-  }).then(() => {
-    http.post("/api/email/del", {"ids": ids, "forcedDel": groupTag.status === 3}).then(res => {
-      if (res.errorNo === 0) {
-        updateList()
-        ElMessage.success('Deleted successfully')
-      } else {
-        ElMessage.error(res.errorMsg)
-      }
-    })
-  }).catch(()=>{})
+const clearSearch = () => {
+  router.push({name: 'list', query: {}})
 }
 
 const rowStyle = function () {
@@ -297,9 +356,8 @@ const rowStyle = function () {
 }
 
 const pageChange = function (p) {
-  http.post("/api/email/list", {tag: tag, page_size: 15, current_page: p, keyword: keyword.value}).then(res => {
-    setData(res.data.list)
-  })
+  currentPage.value = p
+  fetchList(p)
 }
 </script>
 
@@ -506,6 +564,100 @@ const pageChange = function (p) {
 
 .is-unread .mail-date {
   color: var(--pm-primary-color);
+  font-weight: 700;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skeleton-list {
+  padding: 8px 20px;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 58px;
+  border-bottom: 1px solid var(--pm-border-subtle);
+}
+
+.skeleton-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--md-sys-color-surface-container-high) 25%, var(--md-sys-color-surface-container-highest) 37%, var(--md-sys-color-surface-container-high) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+.skeleton-line.w-20 { width: 20%; }
+.skeleton-line.w-45 { width: 45%; }
+.skeleton-line.w-10 { width: 10%; }
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line { animation: none; }
+}
+
+.list-state {
+  height: 100%;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  text-align: center;
+  color: var(--pm-text-secondary);
+}
+
+.state-icon {
+  font-size: 44px;
+  color: var(--md-sys-color-outline);
+}
+
+.state-title {
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 34ch;
+}
+
+.state-action {
+  margin-top: 4px;
+}
+
+.selection-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  font-size: 12px;
   font-weight: 700;
 }
 

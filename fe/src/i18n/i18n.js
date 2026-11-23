@@ -34,6 +34,13 @@ function detectLanguage() {
 
 export const language = detectLanguage()
 
+// The <html lang> attribute drives hyphenation, screen-reader pronunciation and
+// the :lang() selectors, so it has to follow the interface language rather than
+// staying at the value baked into index.html.
+const htmlLang = {'en': 'en', 'zh-CN': 'zh-Hans', 'zh-TW': 'zh-Hant', 'ar': 'ar', 'fr': 'fr', 'ru': 'ru', 'es': 'es'}
+document.documentElement.lang = htmlLang[language] || language
+document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr'
+
 export function setLanguage(code) {
   if (!supported.includes(code)) return
   localStorage.setItem('imail-lang', code)

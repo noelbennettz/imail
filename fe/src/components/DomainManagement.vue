@@ -228,8 +228,8 @@ const copyText = async (text) => {
   try {
     await navigator.clipboard.writeText(text)
     ElMessage.success(lang.copied)
-  } catch (e) {
-    ElMessage.error('Clipboard unavailable')
+  } catch {
+    ElMessage.error(lang.clipboard_unavailable)
   }
 }
 

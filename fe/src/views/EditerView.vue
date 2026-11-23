@@ -3,10 +3,11 @@
     <div class="composer-header">
       <h2 class="composer-title">{{ lang.compose }}</h2>
       <div class="composer-actions">
+        <el-button v-if="draftStored" class="action-btn" @click="discardDraft">{{ lang.discard_draft }}</el-button>
         <el-button class="action-btn" @click="upload">
           <el-icon><Paperclip /></el-icon> {{ lang.add_att }}
         </el-button>
-        <el-button type="primary" class="send-btn" @click="send(ruleFormRef)">
+        <el-button type="primary" class="send-btn" :loading="sending" :disabled="sending" @click="send(ruleFormRef)">
           <el-icon><Position /></el-icon> {{ lang.send }}
         </el-button>
         <input v-show="false" ref="fileRef" type="file" @change="fileChange" multiple>
@@ -30,7 +31,7 @@
               <template #default>
                 <div class="sender-edit-card">
                   <div class="edit-row">
-                    <span class="edit-label">Prefix</span>
+                    <span class="edit-label">{{ lang.sender_prefix }}</span>
                     <el-input 
                       :disabled="!(globalStatus.userInfos.is_admin)"
                       v-model="ruleForm.sender" 
@@ -38,7 +39,7 @@
                     />
                   </div>
                   <div class="edit-row">
-                    <span class="edit-label">Domain</span>
+                    <span class="edit-label">{{ lang.sender_domain }}</span>
                     <el-select v-model="ruleForm.pickDomain" class="w-full">
                       <el-option :value="item" v-for="item in ruleForm.domains" :key="item">{{ item }}</el-option>
                     </el-select>
@@ -59,7 +60,7 @@
             <el-select 
               v-model="ruleForm.receivers" 
               multiple filterable allow-create :reserve-keyword="false" 
-              placeholder="Recipients..."
+              :placeholder="lang.recipients_ph"
             ></el-select>
           </el-form-item>
         </div>
@@ -70,7 +71,7 @@
             <el-select 
               v-model="ruleForm.cc" 
               multiple filterable allow-create :reserve-keyword="false" 
-              placeholder="Cc..."
+              :placeholder="lang.cc_ph"
             ></el-select>
           </el-form-item>
         </div>
@@ -81,14 +82,14 @@
             <el-select 
               v-model="ruleForm.bcc" 
               multiple filterable allow-create :reserve-keyword="false" 
-              placeholder="Bcc..."
+              :placeholder="lang.bcc_ph"
             ></el-select>
           </el-form-item>
         </div>
 
         <div class="compose-row subject-row">
           <el-form-item prop="subject" class="w-full m-0 border-less-input">
-            <el-input v-model="ruleForm.subject" placeholder="Subject"></el-input>
+            <el-input v-model="ruleForm.subject" :placeholder="lang.subject_ph"></el-input>
             <div class="cc-bcc-toggle" @click="showCcBcc = !showCcBcc" v-if="!showCcBcc">Cc/Bcc</div>
           </el-form-item>
         </div>
@@ -102,7 +103,8 @@
           <div class="att-chip" v-for="(item, index) in fileList" :key="index">
             <el-icon class="att-icon"><Document /></el-icon>
             <span class="att-name">{{ item.name }}</span>
-            <el-icon class="att-remove" @click="delFile(index)"><Close/></el-icon>
+            <span class="att-size">{{ formatSize(item.size) }}</span>
+            <button type="button" class="att-remove" :aria-label="lang.del_btn" @click="delFile(index)"><el-icon><Close/></el-icon></button>
           </div>
         </div>
       </el-form>
@@ -113,13 +115,14 @@
 <script setup>
 import '@wangeditor/editor/dist/css/style.css'
 import {ElMessage} from 'element-plus'
-import {onBeforeUnmount, reactive, ref, shallowRef} from 'vue'
+import {computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch} from 'vue'
 import {Close, Paperclip, Position, ArrowDown, Document} from '@element-plus/icons-vue';
 import lang from '../i18n/i18n';
+import {onBeforeRouteLeave, useRoute, useRouter} from 'vue-router'
 import {Editor, Toolbar} from '@wangeditor/editor-for-vue'
 import {i18nChangeLanguage} from '@wangeditor/editor'
-import {useRoute, useRouter} from 'vue-router';
 import {http} from "@/utils/axios";
+import {confirmAction} from "@/utils/confirm";
 import useGroupStore from '../stores/group'
 import {useGlobalStatusStore} from "@/stores/useGlobalStatusStore";
 
@@ -128,6 +131,12 @@ const route = useRoute();
 const groupStore = useGroupStore()
 const globalStatus = useGlobalStatusStore();
 const showCcBcc = ref(false);
+const sending = ref(false);
+const sent = ref(false);
+const draftStored = ref(false);
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_TOTAL_SIZE = 20 * 1024 * 1024;
+const DRAFT_PREFIX = 'imail-draft:';
 
 if (lang.lang === "zhCn") {
   i18nChangeLanguage('zh-CN')
@@ -141,7 +150,7 @@ const valueHtml = ref('<p><br></p>')
 const toolbarConfig = {}
 const editorConfig = {
   MENU_CONF: {},
-  placeholder: 'Write your message...'
+  placeholder: lang.write_message
 }
 
 editorConfig.MENU_CONF['uploadImage'] = {
@@ -161,47 +170,160 @@ const ruleForm = reactive({
   pickDomain: ""
 })
 const fileList = reactive([]);
+const draftKey = computed(() => {
+  const info = globalStatus.userInfos || {};
+  const account = info.account || 'anon';
+  const domain = info.domain || (info.domains || [])[0] || '';
+  return DRAFT_PREFIX + account + '@' + domain;
+});
+
+let hydrated = false
+let draftTimer = null
+
+const hasBody = () => Boolean(valueHtml.value && valueHtml.value !== '<p><br></p>')
+const hasContent = () => Boolean(
+    ruleForm.subject.trim() || ruleForm.receivers.length || ruleForm.cc.length ||
+    ruleForm.bcc.length || hasBody() || fileList.length
+)
+
+const clearDraft = () => {
+  try {
+    localStorage.removeItem(draftKey.value)
+  } catch {
+    // Storage can be unavailable in private modes; a lost draft is not fatal.
+  }
+  draftStored.value = false
+}
+
+const saveDraft = () => {
+  if (!draftKey.value) return
+  if (!hasContent()) {
+    clearDraft()
+    return
+  }
+  try {
+    // Attachments are intentionally left out: their base64 payload would blow
+    // through the storage quota and the send request re-reads them anyway.
+    localStorage.setItem(draftKey.value, JSON.stringify({
+      subject: ruleForm.subject,
+      receivers: ruleForm.receivers,
+      cc: ruleForm.cc,
+      bcc: ruleForm.bcc,
+      html: valueHtml.value,
+      nickName: ruleForm.nickName,
+      sender: ruleForm.sender,
+      pickDomain: ruleForm.pickDomain,
+      savedAt: Date.now(),
+    }))
+    draftStored.value = true
+  } catch {
+    draftStored.value = false
+  }
+}
+
+const restoreDraft = () => {
+  if (route.query.to || route.query.cc || route.query.subject || route.query.body) return
+  try {
+    const raw = localStorage.getItem(draftKey.value)
+    if (!raw) return
+    const draft = JSON.parse(raw)
+    if (!draft) return
+    if (draft.subject) ruleForm.subject = draft.subject
+    if (Array.isArray(draft.receivers)) ruleForm.receivers = draft.receivers
+    if (Array.isArray(draft.cc)) ruleForm.cc = draft.cc
+    if (Array.isArray(draft.bcc)) ruleForm.bcc = draft.bcc
+    if (draft.html) valueHtml.value = draft.html
+    if (draft.sender) ruleForm.sender = draft.sender
+    if (draft.pickDomain && ruleForm.domains.includes(draft.pickDomain)) ruleForm.pickDomain = draft.pickDomain
+    if (draft.nickName) ruleForm.nickName = draft.nickName
+    showCcBcc.value = ruleForm.cc.length > 0 || ruleForm.bcc.length > 0
+    draftStored.value = true
+    ElMessage.info(lang.draft_restored)
+  } catch {
+    clearDraft()
+  }
+}
+
+const discardDraft = () => {
+  clearDraft()
+  ruleForm.subject = ''
+  ruleForm.receivers = []
+  ruleForm.cc = []
+  ruleForm.bcc = []
+  valueHtml.value = '<p><br></p>'
+}
+
+const applyPrefill = () => {
+  const query = route.query
+  if (query.to) {
+    ruleForm.receivers = String(query.to).split(',').map(item => item.trim()).filter(Boolean)
+  }
+  if (query.cc) {
+    ruleForm.cc = String(query.cc).split(',').map(item => item.trim()).filter(Boolean)
+    showCcBcc.value = ruleForm.cc.length > 0
+  }
+  if (query.subject) {
+    ruleForm.subject = String(query.subject)
+  }
+  if (query.body) {
+    const escaped = String(query.body)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>')
+    valueHtml.value = `<p>${escaped}</p>`
+  }
+}
+
+const finishInit = () => {
+  ruleForm.sender = globalStatus.userInfos.account
+  ruleForm.domains = globalStatus.userInfos.domains
+  ruleForm.pickDomain = globalStatus.userInfos.domains[0]
+  ruleForm.nickName = globalStatus.userInfos.name
+  applyPrefill()
+  restoreDraft()
+  hydrated = true
+}
 
 const init = function () {
-  const applyPrefill = () => {
-    const query = route.query
-    if (query.to) {
-      ruleForm.receivers = String(query.to).split(',').map(item => item.trim()).filter(Boolean)
-    }
-    if (query.cc) {
-      ruleForm.cc = String(query.cc).split(',').map(item => item.trim()).filter(Boolean)
-      showCcBcc.value = ruleForm.cc.length > 0
-    }
-    if (query.subject) {
-      ruleForm.subject = String(query.subject)
-    }
-    if (query.body) {
-      const escaped = String(query.body)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/\n/g, '<br>')
-      valueHtml.value = `<p>${escaped}</p>`
-    }
+  if (Object.keys(globalStatus.userInfos).length === 0 || globalStatus.userInfos === null || globalStatus.userInfos === undefined) {
+    globalStatus.init(finishInit)
+  } else {
+    finishInit()
   }
-
-    if ( Object.keys(globalStatus.userInfos)==0 || globalStatus.userInfos === null || globalStatus.userInfos == undefined ){
-      globalStatus.init(()=>{
-        ruleForm.sender = globalStatus.userInfos.account
-        ruleForm.domains = globalStatus.userInfos.domains
-        ruleForm.pickDomain = globalStatus.userInfos.domains[0]
-        ruleForm.nickName = globalStatus.userInfos.name
-        applyPrefill()
-      })
-    }else{
-      ruleForm.sender = globalStatus.userInfos.account
-      ruleForm.domains = globalStatus.userInfos.domains
-      ruleForm.pickDomain = globalStatus.userInfos.domains[0]
-      ruleForm.nickName = globalStatus.userInfos.name
-      applyPrefill()
-    }
 }
 init()
+
+watch(
+    [() => ruleForm.subject, () => ruleForm.receivers, () => ruleForm.cc, () => ruleForm.bcc,
+      valueHtml, () => ruleForm.sender, () => ruleForm.pickDomain, () => ruleForm.nickName],
+    () => {
+      if (!hydrated) return
+      clearTimeout(draftTimer)
+      draftTimer = setTimeout(saveDraft, 1200)
+    },
+    {deep: true}
+)
+
+const onBeforeUnload = (event) => {
+  if (!hasContent() || sent.value) return
+  saveDraft()
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
+
+onBeforeRouteLeave(async () => {
+  if (sent.value || !hasContent()) return true
+  saveDraft()
+  return await confirmAction(lang.unsaved_title, {
+    title: lang.unsaved_title,
+    confirmText: lang.leave,
+    cancelText: lang.stay,
+  })
+})
+
 
 const validateSender = function (rule, value, callback) {
   if (typeof ruleForm.sender === "undefined" || ruleForm.sender === null || ruleForm.sender.trim() === "") {
@@ -261,6 +383,8 @@ const rules = reactive({
 
 const editorRef = shallowRef()
 onBeforeUnmount(() => {
+  clearTimeout(draftTimer)
+  window.removeEventListener('beforeunload', onBeforeUnload)
   const editor = editorRef.value
   if (editor == null) return
   editor.destroy()
@@ -271,66 +395,95 @@ const handleCreated = (editor) => {
 }
 
 const send = function (formEl) {
-  if (!formEl) return
+  if (!formEl || sending.value) return
   formEl.validate((valid) => {
-    if (valid) {
-      if(ruleForm.receivers.length === 0 && ruleForm.cc.length === 0 && ruleForm.bcc.length === 0) {
-        ElMessage.warning("Please specify at least one recipient");
-        return;
-      }
-      let objectTos = ruleForm.receivers.map(e => ({name: "", email: e}));
-      let objectCcs = ruleForm.cc.map(e => ({name: "", email: e}));
-      let objectBccs = ruleForm.bcc.map(e => ({name: "", email: e}));
-
-      let text = editorRef.value.getText()
-
-      http.post("/api/email/send", {
-        from: {name: ruleForm.nickName, email: ruleForm.sender + "@" + ruleForm.pickDomain},
-        to: objectTos,
-        cc: objectCcs,
-        bcc: objectBccs,
-        subject: ruleForm.subject,
-        text: text,
-        html: valueHtml.value,
-        attrs: fileList
-      }).then(res => {
-        if (res.errorNo === 0) {
-          ElMessage.success(lang.succ_send)
-          groupStore.name = lang.outbox
-          groupStore.tag = '{"type":1,"status":-1}'
-          router.replace({name: 'list'})
-        } else {
-          ElMessage.error(res.data)
-        }
-      })
-    } else {
-      return false
+    if (!valid) return false
+    if (ruleForm.receivers.length === 0 && ruleForm.cc.length === 0 && ruleForm.bcc.length === 0) {
+      ElMessage.warning(lang.please_recipient)
+      return
     }
+    const objectTos = ruleForm.receivers.map(e => ({name: "", email: e}));
+    const objectCcs = ruleForm.cc.map(e => ({name: "", email: e}));
+    const objectBccs = ruleForm.bcc.map(e => ({name: "", email: e}));
+
+    const text = editorRef.value.getText()
+
+    sending.value = true
+    http.post("/api/email/send", {
+      from: {name: ruleForm.nickName, email: ruleForm.sender + "@" + ruleForm.pickDomain},
+      to: objectTos,
+      cc: objectCcs,
+      bcc: objectBccs,
+      subject: ruleForm.subject,
+      text: text,
+      html: valueHtml.value,
+      attrs: fileList
+    }).then(res => {
+      sending.value = false
+      if (res.errorNo === 0) {
+        sent.value = true
+        clearTimeout(draftTimer)
+        clearDraft()
+        ElMessage.success(lang.succ_send)
+        groupStore.name = lang.outbox
+        groupStore.tag = '{"type":1,"status":-1}'
+        router.replace({name: 'list'})
+      } else {
+        ElMessage.error(res.data || res.errorMsg || lang.send_failed)
+      }
+    }).catch(() => {
+      sending.value = false
+    })
   })
 }
+
+const formatSize = (bytes) => {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const totalAttachmentSize = () => fileList.reduce((sum, item) => sum + (item.size || 0), 0)
 
 const upload = function () {
   fileRef.value.dispatchEvent(new MouseEvent('click'))
 }
 
 const fileChange = function (e) {
-  let files = e.target.files || e.dataTransfer.files;
+  const files = e.target.files || e.dataTransfer.files;
   if (!files.length) return;
+  let total = totalAttachmentSize()
+  const limitLabel = formatSize(MAX_FILE_SIZE)
   for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    if (file.size > MAX_FILE_SIZE) {
+      ElMessage.warning(lang.attachment_too_large.replace('{name}', file.name).replace('{limit}', limitLabel))
+      continue
+    }
+    if (total + file.size > MAX_TOTAL_SIZE) {
+      ElMessage.warning(lang.attachment_total_too_large.replace('{limit}', formatSize(MAX_TOTAL_SIZE)))
+      break
+    }
+    total += file.size
     const reader = new FileReader();
     reader.onload = function fileReadCompleted() {
       fileList.push({
-        name: files[i].name,
-        data: this.result
+        name: file.name,
+        data: this.result,
+        size: file.size
       })
     };
-    reader.readAsDataURL(files[i]);
+    reader.readAsDataURL(file);
   }
+  // Let the same file be picked again after a rejection.
+  e.target.value = ''
 }
 
 const delFile = function (index) {
-  fileList.splice(index, 1);
+  fileList.splice(index, 1)
 }
+
 </script>
 
 <style scoped>
@@ -671,9 +824,27 @@ const delFile = function (index) {
   margin-right: 8px;
 }
 
+.att-size {
+  margin-right: 8px;
+  font-size: 11px;
+  color: var(--pm-text-muted);
+}
+
 .att-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 0;
+  background: transparent;
   cursor: pointer;
   color: var(--pm-text-muted);
+  border-radius: 999px;
+}
+
+.att-remove:focus-visible {
+  outline: 2px solid var(--pm-primary-color);
+  outline-offset: 2px;
 }
 
 .att-remove:hover {

@@ -9,7 +9,7 @@ let cached = null
 function storage() {
     try {
         return window.sessionStorage
-    } catch (e) {
+    } catch {
         return null
     }
 }

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import {ElMessage} from 'element-plus'
 import lang from '../i18n/i18n';
 import {router} from "@/router";
 import {getSetupToken, isSetupAPI, SETUP_TOKEN_HEADER} from "@/utils/setupToken";
@@ -12,6 +13,30 @@ const http = axios.create({
         'Lang': lang.lang
     }
 });
+
+// Multiple requests usually fail together when the network drops. One notice is
+// enough; the rest would only stack on top of it.
+let lastNoticeAt = 0
+
+function notify(message) {
+    const now = Date.now()
+    if (now - lastNoticeAt < 1500) return
+    lastNoticeAt = now
+    ElMessage.error(message)
+}
+
+// Turns a transport failure into a sentence a person can act on. Business
+// failures (`errorNo !== 0`) keep using the server's own message.
+export function errorMessage(error) {
+    if (error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT') {
+        return lang.timeout_error
+    }
+    const status = error?.response?.status
+    if (!status) return lang.network_error
+    if (status === 429) return lang.too_many_attempts
+    if (status >= 500) return lang.server_error
+    return lang.request_failed
+}
 
 // Request interceptor
 http.interceptors.request.use((config) => {
@@ -38,7 +63,7 @@ http.interceptors.response.use(async (response) => {
         await router.replace({
             path: '/login',
             query: {
-                redirect: router.currentRoute.fullPath
+                redirect: router.currentRoute.value.fullPath
             }
         });
     }
@@ -47,65 +72,26 @@ http.interceptors.response.use(async (response) => {
         await router.replace({
             path: '/setup',
             query: {
-                redirect: router.currentRoute.fullPath
+                redirect: router.currentRoute.value.fullPath
             }
         });
     }
     return response.data;
 }, async (error) => {
     // Response error
-    if (error.response && error.response.status) {
-        let message = ""
-        switch (error.response.status) {
-            case 400:
-                message = 'Request error';
-                break;
-            case 401:
-                message = 'Request error';
-                break;
-            case 403:
-               if (!isSetupAPI(error.config?.url)) {
-                   await router.replace({
-                        path: '/login',
-                        query: {
-                            redirect: router.currentRoute.fullPath
-                        }
-                    });
-               }
-                message = 'Request error';
-                break;
-            case 429:
-                message = 'Too many attempts';
-                break;
-            case 404:
-                message = 'Requested address error';
-                break;
-            case 408:
-                message = 'Request timed out';
-                break;
-            case 500:
-                message = 'Internal server error!';
-                break;
-            case 501:
-                message = 'Service not implemented!';
-                break;
-            case 502:
-                message = 'Gateway error!';
-                break;
-            case 503:
-                message = 'Service unavailable!';
-                break;
-            case 504:
-                message = 'Gateway timed out!';
-                break;
-            case 505:
-                message = 'HTTP version not supported';
-                break;
-            default:
-                // eslint-disable-next-line no-unused-vars
-                message = 'Request failed';
-        }
-        return Promise.reject(error);
+    const status = error.response && error.response.status
+    if (status === 403 && !isSetupAPI(error.config?.url)) {
+        await router.replace({
+            path: '/login',
+            query: {
+                redirect: router.currentRoute.value.fullPath
+            }
+        });
+    }
+    const message = errorMessage(error)
+    error.userMessage = message
+    if (!error.config?.silent) {
+        notify(message)
     }
     return Promise.reject(error);
 });

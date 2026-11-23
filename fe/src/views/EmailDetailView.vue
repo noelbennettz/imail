@@ -1,11 +1,11 @@
 <template>
   <div class="mail-detail-container">
     <div class="mail-detail-header">
-      <el-button @click="$router.back()" plain class="back-btn">
+      <el-button @click="goBack" plain class="back-btn" :aria-label="lang.back_to_mailbox">
         <el-icon><Back /></el-icon>
       </el-button>
       <div class="action-buttons">
-        <el-button plain @click="compose('reply')">
+        <el-button type="primary" @click="compose('reply')">
           <el-icon><ChatLineRound/></el-icon> {{ lang.reply }}
         </el-button>
         <el-button plain @click="compose('reply_all')">
@@ -14,15 +14,33 @@
         <el-button plain @click="compose('forward')">
           <el-icon><Promotion/></el-icon> {{ lang.forward }}
         </el-button>
-        <el-button plain @click="handleDelete">
+        <el-button plain @click="handleDelete" :aria-label="lang.del_btn">
           <el-icon><Delete /></el-icon>
         </el-button>
       </div>
     </div>
 
     <div class="mail-detail-content" ref="contentRef" @scroll.passive="onContentScroll">
+      <div v-if="loading" class="detail-skeleton" role="status" aria-live="polite">
+        <span class="visually-hidden">{{ lang.loading }}</span>
+        <div class="skeleton-line w-60" aria-hidden="true"/>
+        <div class="skeleton-card" aria-hidden="true">
+          <div class="skeleton-line w-30"/>
+          <div class="skeleton-line w-80"/>
+          <div class="skeleton-line w-70"/>
+          <div class="skeleton-line w-40"/>
+        </div>
+      </div>
+
+      <div v-else-if="loadError" class="detail-state" role="alert">
+        <el-icon class="state-icon"><WarningFilled/></el-icon>
+        <p class="state-title">{{ loadError }}</p>
+        <el-button @click="loadDetail">{{ lang.retry }}</el-button>
+      </div>
+
+      <template v-else>
       <div class="mail-subject-row">
-        <h1 class="mail-subject">{{ isThread ? threadSubject : detailData.subject }}</h1>
+        <h1 class="mail-subject">{{ isThread ? threadSubject : (detailData.subject || lang.no_subject) }}</h1>
         <span v-if="isThread && messages.length > 1" class="thread-count-pill">
           {{ messages.length }} {{ lang.messages }}
         </span>
@@ -104,13 +122,14 @@
       <div v-else-if="isThread && threadTotal > threadPageSize" class="thread-load-end">
         {{ lang.all_loaded }} ({{ threadTotal }})
       </div>
+      </template>
     </div>
 
     <el-dialog v-model="sourceVisible" :title="lang.view_source" width="820px">
       <pre class="source-view">{{ sourceText }}</pre>
       <template #footer>
         <el-button @click="copySource">{{ lang.copy }}</el-button>
-        <el-button @click="sourceVisible = false">Close</el-button>
+        <el-button @click="sourceVisible = false">{{ lang.close }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -119,10 +138,11 @@
 <script setup>
 import {computed, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {ChatDotRound, ChatLineRound, Document, Back, Delete, Download, Promotion, MoreFilled} from '@element-plus/icons-vue';
-import {ElMessage, ElMessageBox} from 'element-plus';
+import {ChatDotRound, ChatLineRound, Document, Back, Delete, Download, Promotion, MoreFilled, WarningFilled} from '@element-plus/icons-vue';
+import {ElMessage} from 'element-plus';
 import lang from '../i18n/i18n';
 import {http} from "@/utils/axios";
+import {confirmAction} from "@/utils/confirm";
 import useGroupStore from '../stores/group';
 import {useGlobalStatusStore} from "@/stores/useGlobalStatusStore";
 import MailBodyFrame from '../components/MailBodyFrame.vue';
@@ -138,6 +158,8 @@ const messages = ref([])
 const threadPageSize = 5
 const threadTotal = ref(0)
 const loadingMore = ref(false)
+const loading = ref(true)
+const loadError = ref('')
 const sourceVisible = ref(false)
 const sourceText = ref('')
 
@@ -188,10 +210,15 @@ const loadThreadPage = (reset) => {
   if (!reset && !threadHasMore.value) return
   const offset = reset ? 0 : messages.value.length
   loadingMore.value = true
+  if (reset) {
+    loading.value = true
+    loadError.value = ''
+  }
   http.post("/api/email/thread", {id, offset, limit: threadPageSize}).then(res => {
     loadingMore.value = false
+    loading.value = false
     if (res.errorNo !== 0) {
-      ElMessage.error(res.errorMsg || 'Unable to load conversation')
+      loadError.value = res.errorMsg || lang.load_failed
       return
     }
     const page = res.data || {}
@@ -206,8 +233,10 @@ const loadThreadPage = (reset) => {
     if (messages.value.length > 0) {
       detailData.value = messages.value[messages.value.length - 1]
     }
-  }).catch(() => {
+  }).catch(err => {
     loadingMore.value = false
+    loading.value = false
+    loadError.value = err?.userMessage || lang.load_failed
   })
 }
 
@@ -223,7 +252,13 @@ const onContentScroll = (event) => {
 
 const loadDetail = () => {
   const id = parseInt(route.params.id)
-  if (!id) return
+  if (!id) {
+    loading.value = false
+    loadError.value = lang.not_found_desc
+    return
+  }
+  loading.value = true
+  loadError.value = ''
   messages.value = []
   threadTotal.value = 0
   if (isThread.value) {
@@ -231,8 +266,15 @@ const loadDetail = () => {
     return
   }
   http.post("/api/email/detail", {id}).then(res => {
-    if (res.errorNo !== 0) return
+    loading.value = false
+    if (res.errorNo !== 0) {
+      loadError.value = res.errorMsg || lang.load_failed
+      return
+    }
     detailData.value = prepareMessage(res.data)
+  }).catch(err => {
+    loading.value = false
+    loadError.value = err?.userMessage || lang.load_failed
   })
 }
 
@@ -255,6 +297,16 @@ const formatDetailDate = (dateStr) => {
 
 const router2 = router
 const globalStatus = useGlobalStatusStore()
+
+// A deep link has no previous entry, so falling back to the mailbox keeps the
+// back button from doing nothing in a new tab.
+const goBack = () => {
+  if (window.history.state?.back) {
+    router.back()
+  } else {
+    router.push({name: 'list'})
+  }
+}
 
 const stripHtml = (html) => {
   if (!html) return ''
@@ -306,7 +358,7 @@ const removeMessage = (id) => {
   }
 }
 
-const deleteMessage = (message) => {
+const deleteMessage = async (message) => {
   const id = message.id
   if (!id) return
   let forcedDel = false
@@ -316,23 +368,18 @@ const deleteMessage = (message) => {
   } catch {
     forcedDel = false
   }
-  ElMessageBox.confirm(lang.del_email_confirm, 'Warning', {
-    confirmButtonText: 'OK',
-    cancelButtonText: 'Cancel',
-    type: 'warning',
-  }).then(() => {
-    http.post("/api/email/del", {ids: [id], forcedDel}).then(res => {
-      if (res.errorNo !== 0) {
-        ElMessage.error(res.errorMsg)
-        return
-      }
-      ElMessage.success('Deleted successfully')
-      if (isThread.value) {
-        removeMessage(id)
-      } else {
-        router.push({name: 'list'})
-      }
-    })
+  if (!await confirmAction(lang.del_email_confirm)) return
+  http.post("/api/email/del", {ids: [id], forcedDel}).then(res => {
+    if (res.errorNo !== 0) {
+      ElMessage.error(res.errorMsg)
+      return
+    }
+    ElMessage.success(lang.deleted)
+    if (isThread.value) {
+      removeMessage(id)
+    } else {
+      router.push({name: 'list'})
+    }
   }).catch(() => {})
 }
 
@@ -355,7 +402,7 @@ const copySource = async () => {
     await navigator.clipboard.writeText(sourceText.value)
     ElMessage.success(lang.copied)
   } catch {
-    ElMessage.error('Clipboard unavailable')
+    ElMessage.error(lang.clipboard_unavailable)
   }
 }
 
@@ -364,7 +411,7 @@ const handleMessageCommand = (command, message) => {
   if (command === 'delete') deleteMessage(message)
 }
 
-const handleDelete = () => {
+const handleDelete = async () => {
   const id = activeMessage.value.id || parseInt(route.params.id);
   if (!id) return;
 
@@ -377,28 +424,95 @@ const handleDelete = () => {
   try {
     const groupTag = JSON.parse(tag);
     forcedDel = groupTag.status === 3;
-  } catch (e) {
+  } catch {
     forcedDel = false;
   }
 
-  ElMessageBox.confirm(lang.del_email_confirm, 'Warning', {
-    confirmButtonText: 'OK',
-    cancelButtonText: 'Cancel',
-    type: 'warning',
-  }).then(() => {
-    http.post("/api/email/del", {ids: [id], forcedDel}).then(res => {
-      if (res.errorNo === 0) {
-        ElMessage.success('Deleted successfully');
-        router.push({name: 'list'});
-      } else {
-        ElMessage.error(res.errorMsg);
-      }
-    });
+  if (!await confirmAction(lang.del_email_confirm)) return
+  http.post("/api/email/del", {ids: [id], forcedDel}).then(res => {
+    if (res.errorNo === 0) {
+      ElMessage.success(lang.deleted);
+      router.push({name: 'list'});
+    } else {
+      ElMessage.error(res.errorMsg);
+    }
   }).catch(() => {});
 }
 </script>
 
 <style scoped>
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.detail-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 8px 4px;
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--md-sys-color-surface-container-high) 25%, var(--md-sys-color-surface-container-highest) 37%, var(--md-sys-color-surface-container-high) 63%);
+  background-size: 400% 100%;
+  animation: detail-shimmer 1.4s ease infinite;
+}
+
+.skeleton-line.w-30 { width: 30%; }
+.skeleton-line.w-40 { width: 40%; }
+.skeleton-line.w-60 { width: 60%; height: 26px; }
+.skeleton-line.w-70 { width: 70%; }
+.skeleton-line.w-80 { width: 80%; }
+
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid var(--pm-border-subtle);
+  border-radius: var(--pm-radius-lg);
+}
+
+@keyframes detail-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line { animation: none; }
+}
+
+.detail-state {
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px;
+  text-align: center;
+  color: var(--pm-text-secondary);
+}
+
+.detail-state .state-icon {
+  font-size: 44px;
+  color: var(--md-sys-color-outline);
+}
+
+.detail-state .state-title {
+  max-width: 36ch;
+  line-height: 1.6;
+}
+
 .mail-detail-container {
   display: flex;
   flex-direction: column;

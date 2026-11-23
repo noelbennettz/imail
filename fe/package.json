@@ -7,7 +7,7 @@
     "build": "vite build",
     "test": "node --test tests/*.test.mjs",
     "preview": "vite preview",
-    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore"
+    "lint": "eslint src"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -28,6 +28,7 @@
     "unplugin-auto-import": "^21.1.0",
     "unplugin-vue-components": "^32.1.0",
     "vite": "^8.3.8",
+    "vue-eslint-parser": "^10.3.0",
     "vue-tsc": "^3.3.14"
   }
 }
