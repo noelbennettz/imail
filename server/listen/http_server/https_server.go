@@ -23,7 +23,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-//go:embed dist/*
+// The front end now emits chunks whose names start with an underscore (Vite's
+// shared helpers). A bare dist/* pattern skips those silently, which left the
+// binary serving an index.html full of 404s; all:dist includes every file.
+//
+//go:embed all:dist
 var local embed.FS
 
 var httpsServer *http.Server
