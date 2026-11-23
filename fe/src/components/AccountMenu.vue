@@ -69,11 +69,13 @@ import lang, {language, languages, setLanguage} from '@/i18n/i18n'
 import {http} from '@/utils/axios'
 import {applyTheme, storedTheme, THEME_EVENT} from '@/utils/theme'
 import {useGlobalStatusStore} from '@/stores/useGlobalStatusStore'
+import useGroupStore from '@/stores/group'
 
 defineProps({compact: {type: Boolean, default: false}})
 
 const router = useRouter()
 const globalStatus = useGlobalStatusStore()
+const groupStore = useGroupStore()
 const open = ref(false)
 const mode = ref(storedTheme())
 
@@ -106,6 +108,8 @@ const logout = async () => {
   open.value = false
   await http.post('/api/logout', {}, {silent: true}).catch(() => {})
   globalStatus.reset()
+  groupStore.reset()
+  document.title = 'iMail'
   await router.replace({name: 'login'})
 }
 

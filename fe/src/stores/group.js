@@ -32,7 +32,15 @@ const useGroupStore = defineStore('group', () => {
     return loadItems()
   }
 
-  return { tag, name, items, itemsLoaded, loadItems, refreshItems }
+  // Signing out must not leave another account's folder badges cached.
+  const reset = () => {
+    tag.value = ''
+    name.value = lang.inbox
+    items.value = []
+    itemsLoaded.value = false
+  }
+
+  return { tag, name, items, itemsLoaded, loadItems, refreshItems, reset }
 })
 
 export default useGroupStore
