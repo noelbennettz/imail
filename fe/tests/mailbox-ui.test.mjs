@@ -165,3 +165,18 @@ test('deep links resolve the session first and unknown paths show a 404', async 
   await page.goto(`${baseURL}/#/nope`, {waitUntil: 'domcontentloaded'})
   await page.waitForSelector('.not-found-card')
 })
+
+test('conversation view groups replies from different participants', async (t) => {
+  const thread = [
+    {id: 4, title: 'Q4 revenue review', desc: 'numbers', datetime: new Date().toISOString(), is_read: true, sender: {Name: 'Ada', EmailAddress: 'ada@example.org'}, to: [], dangerous: false, error: ''},
+    {id: 5, title: 'Re: Q4 revenue review', desc: 'looks right', datetime: new Date().toISOString(), is_read: false, sender: {Name: 'Grace', EmailAddress: 'grace@example.org'}, to: [], dangerous: false, error: ''},
+  ]
+  const page = await openApp({listReply: () => ({errorNo: 0, data: {current_page: 1, total_page: 1, list: thread}})})
+  t.after(() => page.close())
+  await page.goto(`${baseURL}/#/`, {waitUntil: 'domcontentloaded'})
+  await page.waitForSelector('.mail-row-content')
+  const rows = await page.$$eval('.mail-row-content', els => els.length)
+  assert.equal(rows, 1, 'a reply from another participant should join the conversation')
+  const badge = await page.$eval('.thread-count', el => el.textContent.trim())
+  assert.equal(badge, '2')
+})

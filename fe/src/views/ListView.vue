@@ -175,16 +175,16 @@ const hasSelection = computed(() => selectedRows.value.length > 0)
 
 const defaultTag = () => (groupStore.tag || '{"type":0,"status":-1}')
 
-// Conversation grouping is a client-side view of the current page, so it keys on
-// the normalized subject *and* the other party. Subject alone merged unrelated
-// mail from different senders.
+// Conversation grouping is a client-side view of the current page. It has to
+// use the same rule as the server's thread endpoint (normalized subject only),
+// otherwise a reply from a second participant shows as its own row here while
+// the detail page puts it in the conversation.
 const threadKey = (row) => {
   const subject = (row.title || '')
       .replace(/^((re|fwd|fw|回复|回覆|答复|转寄|轉寄|转发)\s*:\s*)+/i, '')
       .trim()
       .toLowerCase()
-  const sender = String(row.sender?.EmailAddress || '').toLowerCase()
-  return `${subject}|${sender}` || ('id:' + row.id)
+  return subject || ('id:' + row.id)
 }
 
 const applyView = (list) => {
