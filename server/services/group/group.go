@@ -22,6 +22,7 @@ type GroupItem struct {
 	Id       int          `json:"id"`
 	Label    string       `json:"label"`
 	Tag      string       `json:"tag"`
+	Unread   int          `json:"unread"`
 	Children []*GroupItem `json:"children"`
 }
 
@@ -293,6 +294,7 @@ func buildChildren(ctx *context.Context, parentId int) []*GroupItem {
 			Id:       group.ID,
 			Label:    group.Name,
 			Tag:      dto.SearchTag{GroupId: group.ID, Status: -1, Type: -1}.ToString(),
+			Unread:   unreadInGroup(ctx, group.ID),
 			Children: buildChildren(ctx, group.ID),
 		})
 	}
@@ -370,7 +372,7 @@ func GetGroupStatus(ctx *context.Context, groupName string, params []string) (st
 		switch param {
 		case "MESSAGES":
 			if groupID > 0 {
-				db.Instance.Table("user_email").Select("count(1)").Where("group_id=?", groupID).Get(&value)
+				db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and group_id=?", ctx.UserID, groupID).Get(&value)
 			} else {
 				value = getGroupNum(ctx, key, false)
 			}
@@ -380,7 +382,7 @@ func GetGroupStatus(ctx *context.Context, groupName string, params []string) (st
 			value = validity
 		case "UNSEEN":
 			if groupID > 0 {
-				db.Instance.Table("user_email").Select("count(1)").Where("group_id=? and is_read=0", groupID).Get(&value)
+				db.Instance.Table("user_email").Select("count(1)").Where("user_id=? and group_id=? and is_read=0", ctx.UserID, groupID).Get(&value)
 			} else {
 				value = getGroupNum(ctx, key, true)
 			}
@@ -460,6 +462,32 @@ func maxUIDForDefaultBox(ctx *context.Context, groupName string) int {
 		db.Instance.Table("user_email").Select("id").Where("user_id=? and ((status = 5 and group_id = 0) or group_id = ?)", ctx.UserID, models.Junk).OrderBy("id desc").Get(&lastID)
 	}
 	return lastID
+}
+
+// unreadInGroup counts one user's unread copies inside a custom folder.
+func unreadInGroup(ctx *context.Context, groupID int) int {
+	var count int
+	db.Instance.Table("user_email").Select("count(1)").
+		Where("user_id=? and group_id=? and is_read=0", ctx.UserID, groupID).Get(&count)
+	return count
+}
+
+// UnreadForTag returns the badge count a folder should show. Sent, drafts and
+// deleted mail deliberately have no badge: an unread counter there is noise.
+func UnreadForTag(ctx *context.Context, tag dto.SearchTag) int {
+	if tag.GroupId > 0 {
+		return unreadInGroup(ctx, tag.GroupId)
+	}
+	var count int
+	switch {
+	case tag.Type == 0 && tag.Status == -1: // INBOX
+		db.Instance.Table("user_email").Select("count(1)").
+			Where("user_id=? and status=0 and (group_id=0 or group_id=?) and is_read=0", ctx.UserID, models.INBOX).Get(&count)
+	case tag.Status == 5: // Junk
+		db.Instance.Table("user_email").Select("count(1)").
+			Where("user_id=? and ((status=5 and group_id=0) or group_id=?) and is_read=0", ctx.UserID, models.Junk).Get(&count)
+	}
+	return count
 }
 
 func getGroupNum(ctx *context.Context, groupName string, mustUnread bool) int {

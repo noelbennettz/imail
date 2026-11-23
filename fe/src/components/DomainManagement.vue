@@ -45,7 +45,7 @@
       </el-table>
       <template #footer>
         <el-button @click="copyAll">{{ lang.copy_all }}</el-button>
-        <el-button @click="dnsVisible = false">Close</el-button>
+        <el-button @click="dnsVisible = false">{{ lang.close }}</el-button>
       </template>
     </el-dialog>
 
@@ -68,7 +68,7 @@
       </el-descriptions>
 
       <el-alert v-if="tlsStatus.state === 'error'" type="error" :closable="false" class="tls-alert"
-                :title="tlsStatus.message || 'Certificate request failed'"/>
+                :title="tlsStatus.message || lang.cert_request_failed"/>
       <el-alert v-else-if="tlsStatus.state === 'pending'" type="info" :closable="false" class="tls-alert"
                 :title="tlsStatus.message || lang.tls_pending"/>
 
@@ -118,7 +118,7 @@
       </div>
       <el-button class="tls-upload-btn" @click="uploadTLS">{{ lang.tls_upload_btn }}</el-button>
       <template #footer>
-        <el-button @click="tlsVisible = false">Close</el-button>
+        <el-button @click="tlsVisible = false">{{ lang.close }}</el-button>
       </template>
     </el-dialog>
 
@@ -129,7 +129,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">Cancel</el-button>
+        <el-button @click="dialogVisible = false">{{ lang.cancel }}</el-button>
         <el-button type="primary" :loading="saving" @click="add">{{ lang.add_domain }}</el-button>
       </template>
     </el-dialog>

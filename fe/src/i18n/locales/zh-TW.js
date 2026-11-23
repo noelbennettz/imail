@@ -256,5 +256,20 @@ export default {
   "confirm_title": "請確認",
   "ok": "確定",
   "no_subject": "（無主旨）",
-  "more_actions": "更多操作"
+  "more_actions": "更多操作",
+  "theme": "主題",
+  "theme_system": "跟隨系統",
+  "theme_light": "淺色",
+  "theme_dark": "深色",
+  "signed_in_as": "目前登入",
+  "field": "欄位",
+  "value": "值",
+  "select_action": "選擇動作",
+  "select_folder": "選擇資料夾",
+  "forward_address": "轉寄地址",
+  "confirm": "確認",
+  "status": "狀態",
+  "cert_request_failed": "憑證申請失敗",
+  "warning_title": "警告",
+  "email_body": "郵件內容"
 }

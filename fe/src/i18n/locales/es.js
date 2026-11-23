@@ -256,5 +256,20 @@ export default {
   "confirm_title": "Confirma",
   "ok": "Aceptar",
   "no_subject": "(sin asunto)",
-  "more_actions": "Más acciones"
+  "more_actions": "Más acciones",
+  "theme": "Tema",
+  "theme_system": "Sistema",
+  "theme_light": "Claro",
+  "theme_dark": "Oscuro",
+  "signed_in_as": "Sesión iniciada como",
+  "field": "Campo",
+  "value": "Valor",
+  "select_action": "Elegir acción",
+  "select_folder": "Elegir carpeta",
+  "forward_address": "Dirección de reenvío",
+  "confirm": "Confirmar",
+  "status": "Estado",
+  "cert_request_failed": "No se pudo solicitar el certificado",
+  "warning_title": "Aviso",
+  "email_body": "Contenido del mensaje"
 }

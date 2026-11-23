@@ -77,7 +77,7 @@
           </el-form-item>
 
           <el-form-item label="Domain">
-            <el-select v-model="editUserInfo.domain" placeholder="Primary domain" style="width: 100%">
+            <el-select v-model="editUserInfo.domain" :placeholder="lang.primary_domain" style="width: 100%">
               <el-option v-for="domain in domains" :key="domain" :label="domain" :value="domain"/>
             </el-select>
           </el-form-item>
@@ -92,7 +92,7 @@
 
           <el-form-item>
             <div class="status-switch">
-              <span class="switch-label">Status</span>
+              <span class="switch-label">{{ lang.status }}</span>
               <el-switch 
                 v-model="editUserInfo.disabled" 
                 class="ml-2" 
@@ -107,8 +107,8 @@
       </div>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="userInfoDialog = false">Cancel</el-button>
-          <el-button type="primary" @click="submit">Confirm</el-button>
+          <el-button @click="userInfoDialog = false">{{ lang.cancel }}</el-button>
+          <el-button type="primary" @click="submit">{{ lang.confirm }}</el-button>
         </span>
       </template>
     </el-dialog>

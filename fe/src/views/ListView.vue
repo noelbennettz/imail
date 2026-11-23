@@ -298,6 +298,7 @@ const markRead = function () {
   http.post("/api/email/read", {"ids": ids}).then(res => {
     if (res.errorNo === 0) {
       refresh()
+      groupStore.refreshItems()
       ElMessage.success(lang.marked_read)
     } else {
       ElMessage.error(res.errorMsg)
@@ -316,6 +317,7 @@ const move = async function (group_id, group_name) {
   http.post("/api/email/move", {"group_id": group_id, "group_name": group_name, "ids": ids}).then(res => {
     if (res.errorNo === 0) {
       refresh()
+      groupStore.refreshItems()
       ElMessage.success(lang.moved)
     } else {
       ElMessage.error(res.errorMsg)
@@ -340,6 +342,7 @@ const del = async function () {
   http.post("/api/email/del", {"ids": ids, "forcedDel": groupTag.status === 3}).then(res => {
     if (res.errorNo === 0) {
       refresh()
+      groupStore.refreshItems()
       ElMessage.success(lang.deleted)
     } else {
       ElMessage.error(res.errorMsg)

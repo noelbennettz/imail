@@ -256,5 +256,20 @@ export default {
   "confirm_title": "Подтвердите",
   "ok": "ОК",
   "no_subject": "(без темы)",
-  "more_actions": "Ещё действия"
+  "more_actions": "Ещё действия",
+  "theme": "Тема",
+  "theme_system": "Системная",
+  "theme_light": "Светлая",
+  "theme_dark": "Тёмная",
+  "signed_in_as": "Вы вошли как",
+  "field": "Поле",
+  "value": "Значение",
+  "select_action": "Выберите действие",
+  "select_folder": "Выберите папку",
+  "forward_address": "Адрес пересылки",
+  "confirm": "Подтвердить",
+  "status": "Статус",
+  "cert_request_failed": "Не удалось запросить сертификат",
+  "warning_title": "Внимание",
+  "email_body": "Текст письма"
 }

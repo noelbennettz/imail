@@ -42,7 +42,7 @@
         <el-form :model="addRuleForm" label-position="top">
           <div class="form-row">
             <el-form-item :label="lang.rule_name" class="flex-grow">
-              <el-input v-model="addRuleForm.name" placeholder="Rule Name"/>
+              <el-input v-model="addRuleForm.name" :placeholder="lang.rule_name"/>
             </el-form-item>
             <el-form-item :label="lang.rule_priority" class="w-32">
               <el-input v-model="addRuleForm.sort" type="number" oninput="value=value.replace(/[^\-\d]/g, '')"/>
@@ -54,7 +54,7 @@
           
           <div class="rules-list">
             <div v-for="(rule, index) in addRuleForm.rules" :key="index" class="rule-line">
-              <el-select v-model="rule.field" placeholder="Field" class="w-32">
+              <el-select v-model="rule.field" :placeholder="lang.field" class="w-32">
                 <el-option key="From" :label="lang.from" value="From"/>
                 <el-option key="Subject" :label="lang.subject" value="Subject"/>
                 <el-option key="To" :label="lang.to" value="To"/>
@@ -62,13 +62,13 @@
                 <el-option key="Content" :label="lang.content" value="Content"/>
               </el-select>
 
-              <el-select v-model="rule.type" placeholder="Type" class="w-32">
+              <el-select v-model="rule.type" :placeholder="lang.type" class="w-32">
                 <el-option key="equal" :label="lang.equal" value="equal"/>
                 <el-option key="contains" :label="lang.contains" value="contains"/>
                 <el-option key="regex" :label="lang.regex" value="regex"/>
               </el-select>
 
-              <el-input v-model="rule.rule" placeholder="Value" class="flex-grow"/>
+              <el-input v-model="rule.rule" :placeholder="lang.value" class="flex-grow"/>
               <el-button type="danger" :icon="Delete" @click="removeRuleLine(index)" text circle/>
             </div>
           </div>
@@ -80,24 +80,24 @@
           <div class="section-title">{{ lang.rule_do }} (Action)</div>
           
           <div class="action-row">
-            <el-select v-model="addRuleForm.action" placeholder="Select Action" @change="ruleTypeChange" class="w-48">
+            <el-select v-model="addRuleForm.action" :placeholder="lang.select_action" @change="ruleTypeChange" class="w-48">
               <el-option key="mark_read" :label="lang.mark_read" :value="READ"/>
               <el-option key="move" :label="lang.move" :value="MOVE"/>
               <el-option key="delete" :label="lang.delete" :value="DELETE"/>
               <el-option key="forward" :label="lang.forward" :value="FORWARD"/>
             </el-select>
             
-            <el-select v-if="addRuleForm.action === 4" v-model="addRuleForm.params" @click="reflushGroupInfos" placeholder="Select Folder" class="flex-grow">
+            <el-select v-if="addRuleForm.action === 4" v-model="addRuleForm.params" @click="reflushGroupInfos" :placeholder="lang.select_folder" class="flex-grow">
               <el-option v-for="gp in groupData.list" :key="gp.id" :label="gp.name" :value="gp.id"/>
             </el-select>
 
-            <el-input v-if="addRuleForm.action === 2" v-model="addRuleForm.params" class="flex-grow" placeholder="Forward Email Address"/>
+            <el-input v-if="addRuleForm.action === 2" v-model="addRuleForm.params" class="flex-grow" :placeholder="lang.forward_address"/>
           </div>
         </el-form>
       </div>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">Cancel</el-button>
+          <el-button @click="dialogVisible = false">{{ lang.cancel }}</el-button>
           <el-button type="primary" @click="submitRule()">
             {{ lang.submit }}
           </el-button>

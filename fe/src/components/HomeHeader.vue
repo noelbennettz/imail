@@ -1,9 +1,14 @@
 <template>
   <div class="header-container">
     <div class="header-left">
-      <div class="mobile-menu-btn" @click="globalStatus.mobileDrawerVisible = true">
+      <button
+          type="button"
+          class="mobile-menu-btn"
+          :aria-label="lang.menu"
+          @click="globalStatus.mobileDrawerVisible = true"
+      >
         <el-icon><EpMenu /></el-icon>
-      </div>
+      </button>
       <div class="mobile-logo">
         <router-link to="/">
           <h1>Mail</h1>
@@ -12,20 +17,17 @@
     </div>
 
     <div class="header-right">
-      <button class="m3-icon-button" title="Settings" @click="router.push('/settings')">
-        <el-icon><Setting/></el-icon>
-      </button>
+      <AccountMenu compact/>
     </div>
   </div>
 </template>
 
 <script setup>
 import {EpMenu} from "vue-icons-plus/ep";
-import {Setting} from "@element-plus/icons-vue";
-import {useRouter} from "vue-router";
+import AccountMenu from "@/components/AccountMenu.vue";
+import lang from "@/i18n/i18n";
 import {useGlobalStatusStore} from "@/stores/useGlobalStatusStore";
 
-const router = useRouter();
 const globalStatus = useGlobalStatusStore();
 </script>
 
@@ -60,6 +62,11 @@ const globalStatus = useGlobalStatusStore();
   color: var(--pm-text-primary);
 }
 
+.mobile-menu-btn:focus-visible {
+  outline: 3px solid var(--pm-primary-color);
+  outline-offset: 2px;
+}
+
 .mobile-logo {
   display: none;
   margin-left: 12px;
@@ -83,7 +90,7 @@ const globalStatus = useGlobalStatusStore();
     justify-content: space-between;
     align-items: center;
     margin: 10px 10px 0;
-    padding: 12px 14px;
+    padding: 8px 12px;
     border-radius: var(--pm-radius-lg);
     border: 1px solid var(--pm-border-color);
     background: var(--pm-surface-glass);

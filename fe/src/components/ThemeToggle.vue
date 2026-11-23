@@ -12,12 +12,13 @@
 import {computed, onMounted, onUnmounted, ref} from 'vue'
 import {Moon, Monitor, Sunny} from '@element-plus/icons-vue'
 import {applyTheme, nextThemeMode, storedTheme, THEME_EVENT} from '@/utils/theme'
+import lang from '@/i18n/i18n'
 
 const mode = ref(storedTheme())
 const labels = {
-  system: 'Theme: system (click to switch)',
-  light: 'Theme: light (click to switch)',
-  dark: 'Theme: dark (click to switch)',
+  system: `${lang.theme}: ${lang.theme_system}`,
+  light: `${lang.theme}: ${lang.theme_light}`,
+  dark: `${lang.theme}: ${lang.theme_dark}`,
 }
 const label = computed(() => labels[mode.value])
 

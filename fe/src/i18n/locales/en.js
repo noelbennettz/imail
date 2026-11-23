@@ -256,5 +256,20 @@ export default {
   "confirm_title": "Please confirm",
   "ok": "OK",
   "no_subject": "(no subject)",
-  "more_actions": "More actions"
+  "more_actions": "More actions",
+  "theme": "Theme",
+  "theme_system": "System",
+  "theme_light": "Light",
+  "theme_dark": "Dark",
+  "signed_in_as": "Signed in as",
+  "field": "Field",
+  "value": "Value",
+  "select_action": "Select action",
+  "select_folder": "Select folder",
+  "forward_address": "Forward to address",
+  "confirm": "Confirm",
+  "status": "Status",
+  "cert_request_failed": "Certificate request failed",
+  "warning_title": "Warning",
+  "email_body": "Email body"
 }

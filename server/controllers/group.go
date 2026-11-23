@@ -53,6 +53,16 @@ func GetUserGroup(ctx *context.Context, w http.ResponseWriter, req *http.Request
 
 	retData = array.Merge(retData, group.GetGroupInfoList(ctx))
 
+	// Badges are computed after the folders are assembled so the client only
+	// needs one request to draw the sidebar.
+	for _, item := range retData {
+		var tag dto.SearchTag
+		if err := json.Unmarshal([]byte(item.Tag), &tag); err != nil {
+			continue
+		}
+		item.Unread = group.UnreadForTag(ctx, tag)
+	}
+
 	response.NewSuccessResponse(retData).FPrint(w)
 }
 

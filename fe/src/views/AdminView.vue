@@ -2,7 +2,7 @@
   <div class="admin-shell">
     <header class="admin-app-bar">
       <div class="admin-brand">
-        <button class="m3-icon-button" @click="router.push('/')" title="Back to mailbox">
+        <button class="m3-icon-button" @click="router.push('/')" :title="lang.admin_back" :aria-label="lang.admin_back">
           <el-icon><Back/></el-icon>
         </button>
         <div>

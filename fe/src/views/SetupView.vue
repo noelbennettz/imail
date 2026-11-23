@@ -173,11 +173,11 @@
       </div>
     </div>
 
-    <el-alert :closable="false" title="Warning!" type="error" center
+    <el-alert :closable="false" :title="lang.warning_title" type="error" center
               v-if="active === 5 && sslSettings.type === 0 && port !== 80" :description="lang.autoSSLWarn"/>
 
     <el-alert v-if="active === 5 && sslSettings.state === 'error' && !dnsChecking" type="error" :closable="false"
-              :title="sslSettings.message || 'Certificate request failed'"/>
+              :title="sslSettings.message || lang.cert_request_failed"/>
 
     <div v-if="active === 5" class="ctn">
       <div class="desc">
@@ -239,7 +239,7 @@
 
     <div v-if="dnsChecking">
       <el-alert v-if="sslSettings.state === 'error'" type="error" :closable="false"
-                :title="sslSettings.message || 'Certificate request failed'"
+                :title="sslSettings.message || lang.cert_request_failed"
                 description="Fix the DNS records and try again. No certificate was issued."/>
       <el-alert v-else type="info" :closable="false" :title="lang.dns_challenge_wait"/>
       <label>{{ lang.dns_desc }}</label>

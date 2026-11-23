@@ -3,16 +3,36 @@ import {RouterView, useRoute} from 'vue-router'
 import HomeHeader from '@/components/HomeHeader.vue'
 import HomeAside from '@/components/HomeAside.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue'
-import {ref, watch, onMounted} from 'vue'
+import {computed, ref, watch, onMounted} from 'vue'
 import {useGlobalStatusStore} from "@/stores/useGlobalStatusStore";
 import {language, languages, setLanguage} from '@/i18n/i18n'
+import useGroupStore from '@/stores/group'
 
 const route = useRoute()
 const pageName = ref(route.name)
 const globalStatus = useGlobalStatusStore();
+const groupStore = useGroupStore();
+const isAuthPage = computed(() => pageName.value === 'login' || pageName.value === 'setup')
 
-onMounted(() => {
-  globalStatus.init(() => {});
+const updateTitle = () => {
+  const inbox = groupStore.items.find(item => {
+    try {
+      const tag = JSON.parse(item.tag)
+      return tag.group_id === 0 && tag.type === 0 && tag.status === -1
+    } catch {
+      return false
+    }
+  })
+  document.title = inbox?.unread > 0 ? `(${inbox.unread}) iMail` : 'iMail'
+}
+
+watch(() => groupStore.items, updateTitle, {deep: true})
+
+onMounted(async () => {
+  await globalStatus.init(() => {});
+  if (globalStatus.isLogin) {
+    groupStore.loadItems().then(updateTitle)
+  }
 });
 
 watch(
@@ -26,13 +46,13 @@ watch(
 
 <template>
   <div id="main">
-    <HomeHeader v-if="pageName !== 'login' && pageName !== 'setup' && pageName !== 'settings'"/>
+    <HomeHeader v-if="!isAuthPage && pageName !== 'settings'"/>
     <div id="content">
-      <div id="aside" v-if="pageName !== 'login' && pageName !== 'setup' && pageName !== 'settings'">
+      <div id="aside" v-if="!isAuthPage && pageName !== 'settings'">
         <HomeAside/>
       </div>
       <el-drawer
-          v-if="pageName !== 'login' && pageName !== 'setup' && pageName !== 'settings'"
+          v-if="!isAuthPage && pageName !== 'settings'"
           v-model="globalStatus.mobileDrawerVisible"
           direction="ltr"
           size="243px"
@@ -41,8 +61,8 @@ watch(
       >
         <HomeAside/>
       </el-drawer>
-      <div id="body" :class="{ 'full-bleed': pageName === 'login' || pageName === 'setup' || pageName === 'settings' }">
-        <div v-if="pageName === 'login' || pageName === 'setup'" class="auth-theme-toggle">
+      <div id="body" :class="{ 'full-bleed': isAuthPage || pageName === 'settings' }">
+        <div v-if="isAuthPage" class="auth-theme-toggle">
           <el-select :model-value="language" @change="setLanguage" size="small" style="width: 130px">
             <el-option v-for="item in languages" :key="item.code" :label="item.label" :value="item.code"/>
           </el-select>

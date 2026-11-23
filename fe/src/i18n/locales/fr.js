@@ -256,5 +256,20 @@ export default {
   "confirm_title": "Confirmez",
   "ok": "OK",
   "no_subject": "(sans objet)",
-  "more_actions": "Plus d’actions"
+  "more_actions": "Plus d’actions",
+  "theme": "Thème",
+  "theme_system": "Système",
+  "theme_light": "Clair",
+  "theme_dark": "Sombre",
+  "signed_in_as": "Connecté en tant que",
+  "field": "Champ",
+  "value": "Valeur",
+  "select_action": "Choisir une action",
+  "select_folder": "Choisir un dossier",
+  "forward_address": "Adresse de transfert",
+  "confirm": "Confirmer",
+  "status": "Statut",
+  "cert_request_failed": "Échec de la demande de certificat",
+  "warning_title": "Avertissement",
+  "email_body": "Contenu du message"
 }

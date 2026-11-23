@@ -14,8 +14,8 @@ import lang from './i18n/i18n'
 initTheme()
 
 const app = createApp(App)
-app.use(router)
 app.use(createPinia())
+app.use(router)
 app.use(ElementPlus)
 
 // A component that throws should not leave a blank window with only a console

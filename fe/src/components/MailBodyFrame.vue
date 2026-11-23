@@ -2,7 +2,7 @@
   <iframe
     ref="frame"
     class="mail-body-frame"
-    title="Email body"
+    :title="lang.email_body"
     :srcdoc="srcdoc"
     :style="{ height: `${height}px` }"
     sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
@@ -13,6 +13,7 @@
 
 <script setup>
 import {computed, onBeforeUnmount, ref, watch} from 'vue'
+import lang from '@/i18n/i18n'
 
 const props = defineProps({
   html: {type: String, default: ''}

@@ -256,5 +256,20 @@ export default {
   "confirm_title": "请确认",
   "ok": "确定",
   "no_subject": "（无主题）",
-  "more_actions": "更多操作"
+  "more_actions": "更多操作",
+  "theme": "主题",
+  "theme_system": "跟随系统",
+  "theme_light": "浅色",
+  "theme_dark": "深色",
+  "signed_in_as": "当前登录",
+  "field": "字段",
+  "value": "值",
+  "select_action": "选择动作",
+  "select_folder": "选择文件夹",
+  "forward_address": "转发地址",
+  "confirm": "确认",
+  "status": "状态",
+  "cert_request_failed": "证书申请失败",
+  "warning_title": "警告",
+  "email_body": "邮件内容"
 }

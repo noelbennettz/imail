@@ -256,5 +256,20 @@ export default {
   "confirm_title": "يرجى التأكيد",
   "ok": "حسنًا",
   "no_subject": "(بدون موضوع)",
-  "more_actions": "إجراءات أخرى"
+  "more_actions": "إجراءات أخرى",
+  "theme": "المظهر",
+  "theme_system": "النظام",
+  "theme_light": "فاتح",
+  "theme_dark": "داكن",
+  "signed_in_as": "مسجّل الدخول باسم",
+  "field": "الحقل",
+  "value": "القيمة",
+  "select_action": "اختر إجراءً",
+  "select_folder": "اختر مجلدًا",
+  "forward_address": "عنوان إعادة التوجيه",
+  "confirm": "تأكيد",
+  "status": "الحالة",
+  "cert_request_failed": "تعذّر طلب الشهادة",
+  "warning_title": "تحذير",
+  "email_body": "نص الرسالة"
 }
