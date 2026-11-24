@@ -1,8 +1,8 @@
 # iMail documentation
 
-> Applies to the current `main`, published as `ghcr.io/noelbennettz/imail:latest`.
-> Older releases keep their documentation on the project site under
-> `versions/<tag>/`.
+> This tree documents the current `main`, published as
+> `ghcr.io/noelbennettz/imail:latest`. A release keeps the documentation it
+> shipped with at its own tag (`git show <tag>:DOCS.md`).
 
 iMail is a self-hosted mail server for your own domains: one Go binary with an
 embedded Vue 3 client. [README.md](README.md) carries the requirements and the

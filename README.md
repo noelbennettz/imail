@@ -1,8 +1,9 @@
 # iMail — a self-hosted mail server for your own domains
 
-> Applies to the current `main`, published as `ghcr.io/noelbennettz/imail:latest`
-> (also tagged `main` and `sha-<commit>`). Documentation for an older release is
-> kept on the project site under `versions/<tag>/`.
+> This tree documents the current `main`, published as
+> `ghcr.io/noelbennettz/imail:latest` (also tagged `main` and `sha-<commit>`). A
+> release keeps the documentation it shipped with at its own tag
+> (`git show <tag>:DOCS.md`).
 >
 > A `v*` tag produces a signed, attested release: versioned image tags, a cosign
 > keyless signature and an SPDX SBOM attached to the GitHub release. See
