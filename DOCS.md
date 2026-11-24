@@ -16,6 +16,7 @@ shortest install path; this file is the reference for everything else.
 - [Installation](#installation)
 - [DNS records](#dns-records)
 - [Ports and TLS](#ports-and-tls)
+- [Delivery and retries](#delivery-and-retries)
 - [Using the mailbox](#using-the-mailbox)
 - [Administration](#administration)
 - [Certificates](#certificates)
@@ -152,8 +153,8 @@ Open `http://<server-ip>/` and complete the wizard:
    Missing or wrong tokens get `403`; after five failures from one address,
    further attempts get `429` for fifteen minutes. The limit is per address, so
    a stranger cannot lock the administrator out of their own first setup. Only
-   the static client, `/api/ping` and a minimal status endpoint answer without a
-   token.
+   the static client, `/api/ping`, the ACME challenge path and a minimal status
+   endpoint answer without a token.
 2. **Database** — SQLite is the default and works well for a small server.
    Choose MySQL or PostgreSQL if you already operate one.
 3. **Administrator** — choose an administrator account and a password of at
@@ -163,8 +164,9 @@ Open `http://<server-ip>/` and complete the wizard:
    (for example `mail.example.com`) and any additional domains.
 5. **DNS** — copy the generated records into your DNS provider. The wizard
    shows A/AAAA, MX, SPF, DKIM, DMARC and PTR guidance.
-6. **TLS** — choose HTTP-01, DNS-01 (manual or Cloudflare) or an uploaded
-   certificate.
+6. **TLS** — choose HTTP-01, DNS-01 (manual or Cloudflare), or point the
+   wizard at the paths of a key/certificate pair that already exists on the
+   server. Pasting a PEM pair is available later from Domains → TLS.
 
 After the wizard finishes, iMail restarts its listeners and the mailbox is
 available at the web domain. The wizard runs over plain HTTP because it finishes
@@ -723,10 +725,10 @@ scope is in [SECURITY.md](SECURITY.md). The list below is what the code does.
   block that address for fifteen minutes in SMTP AUTH, IMAP, POP3 and the
   `/api/login` used by webmail and the administrator console. A blocked attempt
   gets the protocol's ordinary authentication failure (`535`,
-  `NO [AUTHENTICATIONFAILED]`, `-ERR`, a generic `400` for the web login), so a
-  block never tells an attacker whether the account exists, and the check runs
-  before the password hash is computed. The address counter is shared by every
-  protocol, so switching protocol does not reset a block.
+  `NO [AUTHENTICATIONFAILED]`, `-ERR`, a generic `errorNo: 100` body for the web
+  login), so a block never tells an attacker whether the account exists, and the
+  check runs before the password hash is computed. The address counter is shared
+  by every protocol, so switching protocol does not reset a block.
 - Accounts are a second, weaker control against a slow distributed guess: a
   mailbox is blocked for fifteen minutes only after 25 failures within fifteen
   minutes that came from at least three distinct addresses. One source alone can
@@ -886,6 +888,12 @@ IMAIL_TEST_DSN='postgres://postgres:secret@127.0.0.1:5432/imail?sslmode=disable'
 The CI `Tests` workflow runs exactly that against MySQL 8.4 and PostgreSQL 16
 service containers. Use `-p 1`: the tests rebuild the schema once per process,
 so two packages must not share the database at the same time.
+
+A fresh checkout needs two fixtures before `go test`: the embedded client in
+`server/listen/http_server/dist` (`go:embed all:dist`) and a throwaway key pair
+in `server/config/ssl/{private.key,public.crt}` that the IMAP and root suites
+load. [CONTRIBUTING.md](CONTRIBUTING.md#build-and-test) has the exact commands;
+both paths are gitignored.
 
 Format Go code with gofumpt (`gofumpt -l -w .`). The root integration test
 starts the real SMTP, POP3 and IMAP listeners on 25, 110, 465, 587, 993 and 995

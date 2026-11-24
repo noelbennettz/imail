@@ -36,10 +36,29 @@ which starts the real listeners. Package-level tests (`cd server && go test
 1024. `make test_mysql` and `make test_postgres` run the same suite against
 those databases.
 
+On a fresh clone the Go packages need two fixtures that CI creates: the embedded
+web client at `server/listen/http_server/dist` (otherwise `go:embed all:dist`
+cannot compile) and a throwaway key pair at
+`server/config/ssl/{private.key,public.crt}` (the IMAP and root suites load it).
+Create both once:
+
+```bash
+(cd fe && yarn install --frozen-lockfile && yarn build)
+rm -rf server/listen/http_server/dist
+cp -r fe/dist server/listen/http_server/dist
+mkdir -p server/config/ssl
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+  -keyout server/config/ssl/private.key \
+  -out server/config/ssl/public.crt -subj "/CN=localhost"
+```
+
+`server/config/ssl` is gitignored; never point it at a real deployment's
+certificates.
+
 Before sending a change:
 
 ```bash
-gofmt -l .          # or gofumpt -l -w .
+gofumpt -l .        # add -w to format; vendor/ is skipped
 cd server && go vet ./...
 cd fe && yarn build
 ```

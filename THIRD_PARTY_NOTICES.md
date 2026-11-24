@@ -115,8 +115,6 @@ License 1.1**; the licence text is `fe/src/assets/fonts/OFL.txt`.
 
 ## Source files copied into the tree
 
-- `server/utils/utf7/` — MIT, © The Go-IMAP Authors, Proton Technologies AG and
-  Simon Ser. Licence: `server/utils/utf7/LICENSE`.
 - `server/third_party/gopop/` — MIT, © 木木的木头. Licence:
   `server/third_party/gopop/LICENSE`.
 - `server/utils/smtp/smtp.go` — derived from the Go standard library's

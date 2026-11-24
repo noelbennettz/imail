@@ -15,10 +15,14 @@
   "httpsPort": 443,
   "isInit": false,
   "listenMode": "both",
+  "egressMode": "both",
   "tlsMinVersion": "1.2",
   "tlsMaxVersion": "1.3",
   "disableSNICheck": false,
   "serverHostnames": [],
+  "dnsProvider": "",
+  "dnsApiToken": "",
+  "domainCertificates": {},
   "defaultQuotaMB": 1024,
   "limitFailedSignins": true
 }

@@ -45,8 +45,8 @@ services:
       # A named volume works too, but a directory is one `cp` away from a backup.
 
     environment:
-      # Logging zone only. Stored timestamps are UTC and rendered in the
-      # browser's local time.
+      # Accepted for compatibility; iMail pins the process zone to UTC itself,
+      # so this changes neither log lines nor stored timestamps.
       - TZ=UTC
 
     healthcheck:
