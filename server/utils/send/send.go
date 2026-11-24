@@ -10,7 +10,6 @@ import (
 
 	"github.com/noelbennettz/imail/config"
 	"github.com/noelbennettz/imail/dto/parsemail"
-	"github.com/noelbennettz/imail/models"
 	"github.com/noelbennettz/imail/utils/array"
 	"github.com/noelbennettz/imail/utils/async"
 	"github.com/noelbennettz/imail/utils/consts"
@@ -36,57 +35,6 @@ func (e *temporaryMXFallbackError) Error() string {
 
 func (e *temporaryMXFallbackError) Unwrap() error {
 	return e.lookupErr
-}
-
-// Forward forwards an email
-func Forward(ctx *context.Context, e *parsemail.Email, forwardAddress string, user *models.User) error {
-	log.WithContext(ctx).Debugf("Start forwarding email")
-
-	b := e.ForwardBuildBytes(ctx, user, forwardAddress)
-
-	log.WithContext(ctx).Debugf("%s", b)
-
-	from := user.Account + "@" + config.Instance.Domains[0]
-	return forwardData(ctx, config.Instance.Domains[0], b, forwardAddress, from)
-}
-
-func ForwardRaw(ctx *context.Context, e *parsemail.Email, rawEmailData []byte, forwardAddress string, user *models.User) error {
-	log.WithContext(ctx).Debugf("Start raw email forwarding")
-
-	from := user.Account + "@" + config.Instance.Domains[0]
-	return forwardData(ctx, config.Instance.Domains[0], rawEmailData, forwardAddress, from)
-}
-
-func forwardData(ctx *context.Context, fromDomain string, data []byte, forwardAddress string, from string) error {
-	var to []*parsemail.User
-	to = []*parsemail.User{
-		{EmailAddress: forwardAddress},
-	}
-
-	err, _ := doSend(ctx, fromDomain, data, to, from)
-	return err
-}
-
-func Send(ctx *context.Context, e *parsemail.Email) (error, map[string]error) {
-	return SendTo(ctx, e, nil)
-}
-
-// SendTo delivers an email to the given recipients; nil means every To, Cc and
-// Bcc recipient. Outbound SMTP passes the recipients that belong to a local
-// domain, because the remote ones are queued for the worker instead.
-func SendTo(ctx *context.Context, e *parsemail.Email, recipients []*parsemail.User) (error, map[string]error) {
-	_, fromDomain := e.From.GetDomainAccount()
-
-	b := e.BuildBytes(ctx, true)
-
-	var to []*parsemail.User
-	if recipients == nil {
-		to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
-	} else {
-		to = recipients
-	}
-
-	return doSend(ctx, fromDomain, b, to, e.From.EmailAddress)
 }
 
 // Deliver sends already rendered MIME to fixed envelope recipients. The

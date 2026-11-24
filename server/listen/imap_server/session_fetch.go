@@ -279,7 +279,7 @@ func write(ctx *context.Context, w *imapserver.FetchWriter, emailList []*respons
 				var b bytes.Buffer
 				fields := section.HeaderFields
 
-				if fields == nil || len(fields) == 0 {
+				if len(fields) == 0 {
 					// No fields specified: return all common headers
 					fields = []string{
 						"date", "subject", "from", "to", "cc", "message-id", "content-type",

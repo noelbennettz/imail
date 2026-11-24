@@ -2,7 +2,7 @@
 const STORAGE_KEY = 'imail-theme'
 const THEME_EVENT = 'imail-theme-change'
 
-export const THEME_MODES = ['system', 'light', 'dark']
+const THEME_MODES = ['system', 'light', 'dark']
 
 const media = window.matchMedia('(prefers-color-scheme: dark)')
 
@@ -11,7 +11,7 @@ export function storedTheme() {
   return THEME_MODES.includes(value) ? value : 'system'
 }
 
-export function resolvedTheme(mode = storedTheme()) {
+function resolvedTheme(mode = storedTheme()) {
   if (mode === 'system') {
     return media.matches ? 'dark' : 'light'
   }
@@ -52,4 +52,4 @@ export function initTheme() {
   }
 }
 
-export { THEME_EVENT, STORAGE_KEY }
+export { THEME_EVENT }

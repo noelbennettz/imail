@@ -27,7 +27,7 @@ function notify(message) {
 
 // Turns a transport failure into a sentence a person can act on. Business
 // failures (`errorNo !== 0`) keep using the server's own message.
-export function errorMessage(error) {
+function errorMessage(error) {
     if (error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT') {
         return lang.timeout_error
     }

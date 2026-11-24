@@ -54,19 +54,3 @@ func Check(users []*models.User, size int) error {
 	}
 	return nil
 }
-
-// Remaining returns free bytes for a user; -1 means unlimited.
-func Remaining(user *models.User) int64 {
-	if user == nil || user.Quota <= 0 {
-		return -1
-	}
-	used, err := UsedBytes(user.ID)
-	if err != nil {
-		return user.Quota
-	}
-	remaining := user.Quota - used
-	if remaining < 0 {
-		return 0
-	}
-	return remaining
-}

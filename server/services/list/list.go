@@ -144,22 +144,6 @@ func genSQL(ctx *context.Context, count bool, tagInfo dto.SearchTag, keyword str
 	return sql, sqlParams
 }
 
-type statRes struct {
-	Total int64
-	Size  int64
-}
-
-// Stat queries the total number and size of emails
-func Stat(ctx *context.Context) (int64, int64) {
-	sql := `select count(1) as total,sum(size) as size from email e left join user_email ue on e.id=ue.email_id where ue.user_id = ? and e.type = 0 and ue.status != 3`
-	var ret statRes
-	_, err := db.Instance.SQL(sql, ctx.UserID).Get(&ret)
-	if err != nil {
-		log.WithContext(ctx).Errorf("SQL ERROR: %s ,Error:%s", sql, err)
-	}
-	return ret.Total, ret.Size
-}
-
 type ImapListReq struct {
 	UidList []int
 	Star    int

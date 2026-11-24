@@ -371,18 +371,6 @@ func GenSSL(update bool) error {
 	return err
 }
 
-// IssueNow requests a certificate for every configured domain. Unlike the
-// setup path it never waits for the setup channel; listeners are restarted
-// automatically after the certificate is written.
-func IssueNow() error {
-	cfg, err := config.ReadConfig()
-	if err != nil {
-		return errors.Wrap(err)
-	}
-	privateKey, newAccount := config.ReadPrivateKey()
-	return generateCertificate(privateKey, cfg, newAccount, false)
-}
-
 // CertificateInfo describes the certificate currently on disk.
 type CertificateInfo struct {
 	Configured bool     `json:"configured"`
@@ -393,57 +381,6 @@ type CertificateInfo struct {
 	Domains    []string `json:"domains"`
 	Issuer     string   `json:"issuer"`
 	Error      string   `json:"error"`
-}
-
-func GetCertificateInfo() CertificateInfo {
-	cfg, err := config.ReadConfig()
-	if err != nil {
-		return CertificateInfo{Error: err.Error()}
-	}
-	info := CertificateInfo{Type: cfg.SSLType, Provider: cfg.DNSProvider}
-	tlsCert, err := tls.LoadX509KeyPair(cfg.SSLPublicKeyPath, cfg.SSLPrivateKeyPath)
-	if err != nil {
-		info.Error = err.Error()
-		return info
-	}
-	cert, err := x509.ParseCertificate(tlsCert.Certificate[0])
-	if err != nil {
-		info.Error = err.Error()
-		return info
-	}
-	info.Configured = true
-	info.NotAfter = cert.NotAfter.Format("2006-01-02 15:04:05")
-	info.Days = cast.ToInt(time.Until(cert.NotAfter).Hours() / 24)
-	info.Domains = cert.DNSNames
-	info.Issuer = cert.Issuer.String()
-	return info
-}
-
-// UploadCertificate installs an operator-provided key/certificate pair.
-func UploadCertificate(keyPEM, certPEM string) error {
-	if strings.TrimSpace(keyPEM) == "" || strings.TrimSpace(certPEM) == "" {
-		return errors.New("key and certificate are required")
-	}
-	if _, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM)); err != nil {
-		return errors.Wrap(err)
-	}
-	cfg, err := config.ReadConfig()
-	if err != nil {
-		return errors.Wrap(err)
-	}
-	if err := os.WriteFile(cfg.SSLPrivateKeyPath, []byte(keyPEM), 0o600); err != nil {
-		return errors.Wrap(err)
-	}
-	if err := os.WriteFile(cfg.SSLPublicKeyPath, []byte(certPEM), 0o644); err != nil {
-		return errors.Wrap(err)
-	}
-	cfg.SSLType = config.SSLTypeUser
-	if err := config.WriteConfig(cfg); err != nil {
-		return errors.Wrap(err)
-	}
-	config.Instance.SSLType = cfg.SSLType
-	setStatus(StatusSuccess, "Certificate uploaded.")
-	return nil
 }
 
 func CheckSSLCrtInfo() (int, time.Time, bool, error) {

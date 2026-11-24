@@ -349,7 +349,7 @@ func formatContent(entity *message.Entity, ret *Email) error {
 			return nil
 		}
 
-		ret.HTML = []byte(relaxedPolicy.Sanitize(string(body)))
+		ret.HTML = []byte(sanitizeHTML(string(body)))
 	case "multipart/related":
 		entity.Walk(func(path []int, entity *message.Entity, err error) error {
 			if t, _, _ := entity.Header.ContentType(); t == "multipart/related" {
@@ -500,7 +500,7 @@ func (e *Email) ForwardBuildBytes(ctx *context.Context, sender *models.User, for
 	if err != nil {
 		log.Fatal(err)
 	}
-	io.WriteString(w, string(e.Text))
+	_, _ = w.Write(e.Text)
 	w.Close()
 
 	var html mail.InlineHeader
@@ -509,7 +509,7 @@ func (e *Email) ForwardBuildBytes(ctx *context.Context, sender *models.User, for
 	if err != nil {
 		log.Fatal(err)
 	}
-	io.WriteString(w, string(e.HTML))
+	_, _ = w.Write(e.HTML)
 	w.Close()
 
 	tw.Close()
@@ -672,7 +672,7 @@ func (e *Email) BuildBytes(ctx *context.Context, dkim bool) []byte {
 		if err != nil {
 			log.Fatal(err)
 		}
-		io.WriteString(w, string(e.Text))
+		_, _ = w.Write(e.Text)
 		w.Close()
 	}
 
@@ -686,9 +686,9 @@ func (e *Email) BuildBytes(ctx *context.Context, dkim bool) []byte {
 		log.Fatal(err)
 	}
 	if len(e.HTML) > 0 {
-		io.WriteString(w, string(e.HTML))
+		_, _ = w.Write(e.HTML)
 	} else {
-		io.WriteString(w, string(e.Text))
+		_, _ = w.Write(e.Text)
 	}
 
 	w.Close()

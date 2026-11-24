@@ -37,9 +37,7 @@ func Merge[T any](slice1, slice2 []T) []T {
 	s1Len := len(slice1)
 
 	slice3 := make([]T, s1Len+len(slice2))
-	for i, t := range slice1 {
-		slice3[i] = t
-	}
+	copy(slice3, slice1)
 
 	for i, t := range slice2 {
 		slice3[s1Len+i] = t
@@ -57,8 +55,7 @@ func Intersect[T comparable](slice1, slice2 []T) []T {
 	}
 
 	for _, v := range slice2 {
-		exist, _ := m[v]
-		if exist {
+		if m[v] {
 			nn = append(nn, v)
 		}
 	}
@@ -75,8 +72,7 @@ func Difference[T comparable](slice1, slice2 []T) []T {
 	}
 
 	for _, value := range slice1 {
-		exist, _ := m[value]
-		if !exist {
+		if !m[value] {
 			nn = append(nn, value)
 		}
 	}

@@ -69,8 +69,7 @@ func HttpsStart() {
 		if listenErr != nil {
 			panic(listenErr)
 		}
-		var err error
-		err = httpsServer.ServeTLS(listener, "", "")
+		err := httpsServer.ServeTLS(listener, "", "")
 		if err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
 				// Normal shutdown (restart or stop)
