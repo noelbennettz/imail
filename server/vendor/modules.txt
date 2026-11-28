@@ -71,8 +71,8 @@ github.com/go-acme/lego/v4/lego
 github.com/go-acme/lego/v4/log
 github.com/go-acme/lego/v4/platform/wait
 github.com/go-acme/lego/v4/registration
-# github.com/go-jose/go-jose/v4 v4.1.0
-## explicit; go 1.24
+# github.com/go-jose/go-jose/v4 v4.1.6
+## explicit; go 1.24.0
 github.com/go-jose/go-jose/v4
 github.com/go-jose/go-jose/v4/cipher
 github.com/go-jose/go-jose/v4/json
